@@ -44,7 +44,7 @@
 - [x] SQL-миграция: таблицы, правила доступа, приватное хранилище фото. Ты вставляешь её в SQL-редактор Supabase.
 - [x] Скил `wardrobe-stylist` в `clothes/.claude/skills/`.
 - [x] Фото сжимаю до ~800 px с прозрачным фоном и загружаю вместе с карточками. Оригиналы остаются в `wardrobe-photos`.
-- [ ] Автопинг через GitHub Actions каждые 2–3 дня, чтобы Supabase не засыпал. Workflow готов, осталось вписать секреты `SUPABASE_URL` и `SUPABASE_PUBLISHABLE_KEY` в Settings → Secrets → Actions.
+- [x] Автопинг через GitHub Actions каждые 2–3 дня, чтобы Supabase не засыпал.
 
 Результат 2026-09-25: миграция `supabase/001_init.sql` выполнена, в базе 97 карточек и 97 фото (3.1 МБ) плюс 3 пробела гардероба, репозиторий `DemaasTaraskin/wardrobe`. Вход в скил — по ссылке из письма (`login.py accept`): встроенная почта Supabase даёт 2 письма в час и присылает ссылку, а не код.
 
