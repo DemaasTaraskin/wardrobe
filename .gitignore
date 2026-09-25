@@ -1,0 +1,19 @@
+# Секреты и личные данные: никогда не попадают в git
+.env
+.env.*
+miro_board.json
+wardrobe.json
+profile.md
+*.png
+*.jpg
+*.jpeg
+*.webp
+.supabase-session.json
+feedback.md
+personal photo/
+.supabase-login-pending.json
+.webp-cache/
+.wardrobe-push-state.json
+looks_batch*.json
+__pycache__/
+*.pyc

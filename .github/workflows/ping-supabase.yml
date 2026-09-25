@@ -1,0 +1,29 @@
+name: ping-supabase
+
+# Бесплатный проект Supabase засыпает после недели простоя.
+# Этот пинг ходит в базу раз в двое суток, чтобы простоя не было.
+# Секреты репозитория: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY.
+# Publishable-ключ публичен по замыслу, но в секретах он не светится в логах.
+# GitHub отключает расписание после 60 дней без коммитов — если база вдруг уснула,
+# загляни во вкладку Actions и нажми Run workflow.
+
+on:
+  schedule:
+    - cron: "17 6 */2 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Запрос к базе
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            "${URL%/}/rest/v1/items?select=id&limit=1")
+          echo "HTTP $code"
+          # 200 — база ответила; строк не вернёт, их закрывает RLS, и это нормально
+          test "$code" = "200"
