@@ -8,6 +8,8 @@ profile.md
 *.jpg
 *.jpeg
 *.webp
+# кроме иконок самого приложения — они часть сайта
+!docs/icons/*.png
 .supabase-session.json
 feedback.md
 personal photo/

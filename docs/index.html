@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Гардероб</title>
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Гардероб">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Вход -->
+<section id="screen-auth" class="screen" hidden>
+  <div class="auth-box">
+    <h1 class="auth-title">Гардероб</h1>
+    <p class="auth-hint">Вход по почте. Регистрация закрыта: письмо придёт только на приглашённый адрес.</p>
+
+    <form id="auth-email-form" class="stack">
+      <label class="field">
+        <span>Почта</span>
+        <input id="auth-email" type="email" inputmode="email" autocomplete="email" required placeholder="you@example.com">
+      </label>
+      <button class="btn btn-primary" type="submit">Прислать код</button>
+    </form>
+
+    <form id="auth-code-form" class="stack" hidden>
+      <label class="field">
+        <span>Код из письма</span>
+        <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="123456">
+      </label>
+      <button class="btn btn-primary" type="submit">Войти</button>
+      <button class="btn btn-quiet" type="button" id="auth-back">Другая почта</button>
+      <p class="auth-hint">Если кода в письме нет — просто нажми в нём ссылку, она откроет приложение уже с входом.</p>
+    </form>
+
+    <p id="auth-msg" class="msg" hidden></p>
+  </div>
+</section>
+
+<!-- Подбор -->
+<section id="screen-pick" class="screen" hidden>
+  <header class="topbar">
+    <h1>Подобрать</h1>
+    <button class="icon-btn" id="btn-menu" title="Ещё" aria-label="Ещё">⋯</button>
+  </header>
+
+  <div class="pad">
+    <div class="temp-row">
+      <button class="temp-step" id="temp-minus" aria-label="Холоднее">−</button>
+      <div class="temp-value"><input id="temp" type="number" inputmode="numeric" step="1" min="-30" max="40" value="12"><span>°C</span></div>
+      <button class="temp-step" id="temp-plus" aria-label="Теплее">+</button>
+    </div>
+
+    <div id="situations" class="chips"></div>
+
+    <label class="switch">
+      <input type="checkbox" id="rain">
+      <span>Дождь</span>
+    </label>
+
+    <button class="btn btn-primary btn-wide" id="btn-pick">Показать луки</button>
+
+    <div id="pick-results" class="stack results"></div>
+  </div>
+</section>
+
+<!-- Лук -->
+<section id="screen-look" class="screen" hidden>
+  <header class="topbar">
+    <button class="icon-btn" id="look-back" aria-label="Назад">‹</button>
+    <h1 id="look-title">Лук</h1>
+    <span class="topbar-spacer"></span>
+  </header>
+  <div class="pad" id="look-body"></div>
+</section>
+
+<!-- Гардероб -->
+<section id="screen-wardrobe" class="screen" hidden>
+  <header class="topbar">
+    <h1>Гардероб</h1>
+    <button class="icon-btn" id="btn-menu-2" title="Ещё" aria-label="Ещё">⋯</button>
+  </header>
+  <div class="pad">
+    <input id="wd-search" class="search" type="search" placeholder="Поиск по названию или бренду">
+    <div id="wd-filters" class="filters"></div>
+    <p id="wd-count" class="muted small"></p>
+    <div id="wd-grid" class="grid"></div>
+  </div>
+</section>
+
+<!-- Правка карточки -->
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <button class="btn btn-quiet" data-close>Закрыть</button>
+      <strong id="sheet-title">Вещь</strong>
+      <button class="btn btn-primary btn-small" id="sheet-save">Сохранить</button>
+    </div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </div>
+</div>
+
+<!-- Меню -->
+<div id="menu" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card sheet-card-short" role="dialog" aria-modal="true">
+    <div class="sheet-body stack">
+      <p class="muted small" id="menu-user"></p>
+      <button class="btn" id="btn-refresh">Обновить данные</button>
+      <button class="btn btn-quiet" id="btn-logout">Выйти</button>
+    </div>
+  </div>
+</div>
+
+<nav id="tabbar" class="tabbar" hidden>
+  <button data-tab="pick" class="tab is-on">Подбор</button>
+  <button data-tab="wardrobe" class="tab">Гардероб</button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
