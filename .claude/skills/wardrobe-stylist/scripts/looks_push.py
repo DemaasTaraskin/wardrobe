@@ -141,7 +141,8 @@ def coverage(c: sb.Client, season: str) -> None:
     grid: dict = defaultdict(list)
     for l in looks:
         grid[(l["situation"], l["temp_min"], l["temp_max"])].append(l)
-    gapcells = {(g["situation"], g["temp_min"], g["temp_max"]) for g in gaps}
+    def has_gap(s: str, lo: int, hi: int) -> bool:  # пробел может быть записан шире банда
+        return any(g["situation"] == s and g["temp_min"] <= hi and g["temp_max"] >= lo for g in gaps)
 
     sb.say(f"\nПокрытие сезона {season} (в скобках — сколько из них годятся в дождь):")
     sb.say("ситуация   " + "".join(f"  {a}…{b}".ljust(12) for a, b in BANDS))
@@ -150,7 +151,7 @@ def coverage(c: sb.Client, season: str) -> None:
         for band in BANDS:
             got = grid[(s, *band)]
             mark = "—" if not got else f"{len(got)} ({sum(1 for l in got if l['rain_ok'])})"
-            if not got and (s, *band) in gapcells:
+            if not got and has_gap(s, *band):
                 mark = "пробел"
             cells.append(mark.ljust(12))
         sb.say(f"{s:<11}" + "".join(cells))
