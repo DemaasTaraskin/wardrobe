@@ -13,6 +13,10 @@ profile.md
 .supabase-session.json
 feedback.md
 personal photo/
+# личные рабочие документы, лежащие в папке проекта
+ТЗ/
+*.docx
+*.pdf
 .supabase-login-pending.json
 .webp-cache/
 .wardrobe-push-state.json

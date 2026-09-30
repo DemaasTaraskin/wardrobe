@@ -37,8 +37,14 @@ function initAuth() {
     btn.disabled = false;
     if (error) { authMsg(errText(error), true); return; }
     prefs.set('email', email);
-    authMsg('Письмо ушло. Введи код из него — или просто нажми в письме ссылку.');
+    authMsg('Письмо ушло.');
     emailForm.hidden = true;
+    $('#auth-sent').hidden = false;
+  });
+
+  // Встроенная почта Supabase шлёт только ссылку; код появится, если когда-нибудь
+  // подключим свой SMTP и вернём в шаблон {{ .Token }}.
+  $('#auth-show-code').addEventListener('click', () => {
     codeForm.hidden = false;
     $('#auth-code').focus();
   });
@@ -58,6 +64,7 @@ function initAuth() {
 
   $('#auth-back').addEventListener('click', () => {
     codeForm.hidden = true;
+    $('#auth-sent').hidden = true;
     emailForm.hidden = false;
     authMsg('');
   });

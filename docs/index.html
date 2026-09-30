@@ -26,8 +26,14 @@
         <span>Почта</span>
         <input id="auth-email" type="email" inputmode="email" autocomplete="email" required placeholder="you@example.com">
       </label>
-      <button class="btn btn-primary" type="submit">Прислать код</button>
+      <button class="btn btn-primary" type="submit">Прислать письмо</button>
     </form>
+
+    <div id="auth-sent" class="stack" hidden>
+      <p class="auth-hint">Открой письмо на этом же телефоне и нажми в нём ссылку «Sign in» — приложение откроется уже с входом.</p>
+      <button class="btn btn-quiet" type="button" id="auth-show-code">В письме есть код? Ввести вручную</button>
+      <button class="btn btn-quiet" type="button" id="auth-back">Другая почта</button>
+    </div>
 
     <form id="auth-code-form" class="stack" hidden>
       <label class="field">
@@ -35,8 +41,6 @@
         <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="123456">
       </label>
       <button class="btn btn-primary" type="submit">Войти</button>
-      <button class="btn btn-quiet" type="button" id="auth-back">Другая почта</button>
-      <p class="auth-hint">Если кода в письме нет — просто нажми в нём ссылку, она откроет приложение уже с входом.</p>
     </form>
 
     <p id="auth-msg" class="msg" hidden></p>
