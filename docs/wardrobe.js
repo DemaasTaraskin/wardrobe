@@ -8,8 +8,8 @@ import { SECTIONS, SEASONS, subOfItem, subLabel, sectionOf } from './sections.js
 import { openItem, setItemContext, initZoom } from './item.js';
 
 const filters = {
-  section: prefs.get('wd-section', null),
-  sub: prefs.get('wd-sub', null),
+  sections: new Set(prefs.get('wd-sections', [])),
+  subs: new Set(prefs.get('wd-subs', [])),
   situation: prefs.get('wd-situation', 'all'),
   status: prefs.get('wd-status', 'all'),
   seasons: new Set(prefs.get('wd-seasons', [])),
@@ -22,8 +22,8 @@ let urls = new Map();
 let collapsed = new Set(prefs.get('wd-collapsed', []));
 
 function saveFilters() {
-  prefs.set('wd-section', filters.section);
-  prefs.set('wd-sub', filters.sub);
+  prefs.set('wd-sections', [...filters.sections]);
+  prefs.set('wd-subs', [...filters.subs]);
   prefs.set('wd-situation', filters.situation);
   prefs.set('wd-status', filters.status);
   prefs.set('wd-seasons', [...filters.seasons]);
@@ -44,6 +44,11 @@ export function initWardrobe() {
     openFilters();
     render();
   });
+  $('#btn-verify').addEventListener('click', () => {
+    filters.unverifiedOnly = !filters.unverifiedOnly;
+    render();
+  });
+  $('#btn-reset-filters').addEventListener('click', resetAll);
   initZoom();
   setItemContext({ photoUrlMap: urls, afterSave: render });
 }
@@ -91,8 +96,8 @@ const baseItems = () => (state.items || []).filter(matchesCommon);
 function applySections(rows) {
   return rows.filter((i) => {
     const sub = subOfItem(i);
-    if (filters.sub) return sub === filters.sub;
-    if (filters.section) return sectionOf(sub) === filters.section;
+    if (filters.subs.size) return filters.subs.has(sub);
+    if (filters.sections.size) return filters.sections.has(sectionOf(sub));
     return true;
   });
 }
@@ -143,8 +148,7 @@ function render() {
 
   measureHead();
   currentSection = null;
-  if (filters.section || filters.sub) scrollBarsTo(filters.section || sectionOf(filters.sub));
-  else onScroll();
+  onScroll();
 }
 
 /** Заголовки разделов липнут ровно под шапкой, какой бы высоты она ни получилась. */
@@ -170,18 +174,12 @@ function itemCard(item) {
 }
 
 function renderVerifyRow() {
-  const row = $('#wd-verify-row');
+  const btn = $('#btn-verify');
   const pending = (state.items || []).filter((i) => !i.verified).length;
-  clear(row);
-  row.hidden = pending === 0 && !filters.unverifiedOnly;
-  if (row.hidden) return;
-  row.append(el('button', {
-    class: 'verify-btn' + (filters.unverifiedOnly ? ' is-on' : ''),
-    type: 'button',
-    onclick: () => { filters.unverifiedOnly = !filters.unverifiedOnly; render(); },
-  }, [
-    filters.unverifiedOnly ? 'Показать все вещи' : `Необходима верификация · ${pending}`,
-  ]));
+  $('#verify-count').textContent = String(pending);
+  btn.hidden = pending === 0 && !filters.unverifiedOnly;
+  btn.classList.toggle('is-on', filters.unverifiedOnly);
+  btn.title = filters.unverifiedOnly ? 'Показать все вещи' : `Ждут проверки: ${pending}`;
 }
 
 // ------------------------------------------------------------------ три полосы
@@ -206,39 +204,43 @@ function renderBars(rows) {
     bySection.set(section, (bySection.get(section) || 0) + 1);
   }
 
-  // 1. раздел 1 уровня: куртки · верх · низ · обувь · аксессуары
+  // 1. раздел 1 уровня: куртки · верх · низ · обувь · аксессуары, можно выбрать несколько
   const bar1 = clear($('#wd-level1'));
-  bar1.append(chip('Все', !filters.section && !filters.sub, () => {
-    filters.section = null;
-    filters.sub = null;
+  bar1.append(chip('Все', !filters.sections.size && !filters.subs.size, () => {
+    filters.sections.clear();
+    filters.subs.clear();
     saveFilters();
     render();
   }));
   for (const section of SECTIONS) {
     const n = bySection.get(section.id) || 0;
     if (!n) continue;
-    bar1.append(chip(section.label, filters.section === section.id, () => {
-      const same = filters.section === section.id && !filters.sub;
-      filters.section = same ? null : section.id;   // тот же раздел вторым тапом снимается
-      filters.sub = null;
+    bar1.append(chip(section.label, filters.sections.has(section.id), () => {
+      if (filters.sections.has(section.id)) filters.sections.delete(section.id);
+      else filters.sections.add(section.id);
+      // подразделы, выпавшие из выбранных разделов, снимаются сами
+      if (filters.sections.size) {
+        for (const sub of [...filters.subs]) {
+          if (!filters.sections.has(sectionOf(sub))) filters.subs.delete(sub);
+        }
+      }
       saveFilters();
       render();
     }, { count: n, section: section.id }));
   }
 
-  // 2. подразделы — в том же порядке; полоса сама подъезжает к выбранному разделу
+  // 2. подразделы: без выбранного раздела — все подряд, с выбранным — только его
   const bar2 = clear($('#wd-level2'));
-  for (const section of SECTIONS) {
+  const shownSections = filters.sections.size
+    ? SECTIONS.filter((x) => filters.sections.has(x.id))
+    : SECTIONS;
+  for (const section of shownSections) {
     for (const sub of section.subs) {
       const n = bySub.get(sub.id) || 0;
       if (!n) continue;
-      bar2.append(chip(sub.label, filters.sub === sub.id, () => {
-        if (filters.sub === sub.id) {
-          filters.sub = null;
-        } else {
-          filters.sub = sub.id;
-          filters.section = section.id;
-        }
+      bar2.append(chip(sub.label, filters.subs.has(sub.id), () => {
+        if (filters.subs.has(sub.id)) filters.subs.delete(sub.id);
+        else filters.subs.add(sub.id);
         saveFilters();
         render();
       }, { count: n, section: section.id, sub: sub.id }));
@@ -268,6 +270,20 @@ function scrollBarsTo(sectionId) {
   }
 }
 
+function resetAll() {
+  filters.sections.clear();
+  filters.subs.clear();
+  filters.seasons.clear();
+  filters.colors.clear();
+  filters.situation = 'all';
+  filters.status = 'all';
+  filters.unverifiedOnly = false;
+  filters.query = '';
+  $('#wd-search').value = '';
+  saveFilters();
+  render();
+}
+
 function renderActiveFilters() {
   const box = clear($('#wd-active-filters'));
   const bits = [];
@@ -294,7 +310,7 @@ function onScroll() {
   if (scrollTimer) return;
   scrollTimer = setTimeout(() => {
     scrollTimer = 0;
-    if (filters.section || filters.sub) return;
+    if (filters.sections.size || filters.subs.size) return;
     const heads = document.querySelectorAll('.group-head');
     if (!heads.length) return;
     const limit = (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--head-h'), 10) || 150) + 12;

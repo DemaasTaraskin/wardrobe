@@ -4,6 +4,7 @@
   python push.py --dry-run       — только показать, что произойдёт
   python push.py --limit 3       — пробный прогон на нескольких вещах
   python push.py --photos skip   — только карточки, без фото
+  python push.py --cards skip    — только фото, карточки не трогать
   python push.py --photos all    — перезалить все фото, даже неизменившиеся
 
   python push.py --force-verified — переписать и то, что владелец уже проверил
@@ -31,6 +32,7 @@ CACHE = sb.ROOT / ".webp-cache"
 STATE = sb.ROOT / ".wardrobe-push-state.json"
 MAX_SIDE = 800
 QUALITY = 82
+FILL = 0.92  # какую долю квадрата занимает вещь
 
 FIELDS = [
     "source_file", "title", "brand", "category", "subcategory", "seasons",
@@ -42,18 +44,29 @@ FIELDS = [
 
 
 def to_webp(src: pathlib.Path) -> bytes:
-    """Сжимает фото до ~800 px по длинной стороне, прозрачность сохраняется."""
+    """Обрезает прозрачные поля, вписывает вещь в квадрат по центру и сжимает.
+
+    Исходники сняты на вертикальном холсте 2000×2666, а вещь занимает только
+    верхнюю часть — в сетке это выглядело как разнобой. Бенчмарк — бомбер Diesel,
+    у которого холст обрезан по вещи.
+    """
     from PIL import Image
 
     CACHE.mkdir(exist_ok=True)
-    cached = CACHE / (src.stem + ".webp")
+    cached = CACHE / (src.stem + "-sq.webp")
     if cached.exists() and cached.stat().st_mtime >= src.stat().st_mtime:
         return cached.read_bytes()
     with Image.open(src) as im:
         im = im.convert("RGBA")
-        im.thumbnail((MAX_SIDE, MAX_SIDE), Image.LANCZOS)
+        box = im.getchannel("A").getbbox()  # по прозрачности, а не по цвету
+        if box:
+            im = im.crop(box)
+        inner = int(MAX_SIDE * FILL)
+        im.thumbnail((inner, inner), Image.LANCZOS)
+        canvas = Image.new("RGBA", (MAX_SIDE, MAX_SIDE), (0, 0, 0, 0))
+        canvas.paste(im, ((MAX_SIDE - im.width) // 2, (MAX_SIDE - im.height) // 2))
         buf = io.BytesIO()
-        im.save(buf, "WEBP", quality=QUALITY, method=6)
+        canvas.save(buf, "WEBP", quality=QUALITY, method=6)
     data = buf.getvalue()
     cached.write_bytes(data)
     return data
@@ -64,6 +77,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--photos", choices=["auto", "skip", "all"], default="auto")
+    ap.add_argument("--cards", choices=["write", "skip"], default="write",
+                    help="skip — не трогать карточки, залить только фото")
     ap.add_argument("--force-verified", action="store_true",
                     help="переписать карточки, которые владелец уже проверил")
     args = ap.parse_args()
@@ -101,7 +116,7 @@ def main() -> int:
 
     rows = []
     for i in items:
-        if i["source_file"] in protected:
+        if args.cards == "skip" or i["source_file"] in protected:
             continue
         # только то, что в каталоге реально есть: иначе пустой ключ затрёт
         # поле, проставленное скриптом разметки или приложением
@@ -110,6 +125,8 @@ def main() -> int:
         rows.append(row)
 
     saved = []
+    if args.cards == "skip":
+        sb.say("Карточки не трогаю (--cards skip)")
     for chunk in (rows[k:k + 50] for k in range(0, len(rows), 50)):
         saved += c.upsert("items", chunk, on_conflict="user_id,source_file",
                           prefer="return=representation") or []
@@ -119,8 +136,10 @@ def main() -> int:
         sb.say(f"Не тронуто проверенных владельцем: {len(protected)} "
                f"(--force-verified перезапишет и их)")
 
-    # фото заливаем всем, включая проверенные: фото правит только push
-    saved += [existing[sf] for sf in protected]
+    # фото заливаем всем, включая проверенные и пропущенные: фото правит только push
+    covered = {r["source_file"] for r in saved}
+    saved += [existing[i["source_file"]] for i in items
+              if i["source_file"] in existing and i["source_file"] not in covered]
 
     if args.photos == "skip":
         return 0

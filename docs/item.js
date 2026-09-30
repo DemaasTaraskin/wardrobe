@@ -1,7 +1,7 @@
 // Карточка вещи: правка, аналоги и просмотр фото с увеличением.
 // Узор и логотип на экране не показываются — они остаются в базе для сборки луков.
 import {
-  sb, state, SITUATIONS, SLOTS, COLORS, STATUSES, FORMALITY,
+  sb, state, SITUATIONS, LAYERS, SLOT_BY_SECTION, SECTIONS_WITH_LAYER, COLORS, STATUSES, FORMALITY,
   el, $, clear, toast, photoImg, errText,
 } from './lib.js';
 import { SECTIONS, SEASONS, subOfItem, subLabel, sectionOf, CATEGORY_BY_SUB } from './sections.js';
@@ -62,7 +62,6 @@ export function openItem(item) {
   const body = clear($('#sheet-body'));
   $('#sheet-title').textContent = subLabel(subOfItem(item));
 
-  const slots = new Set(item.slots || []);
   const colors = new Set(item.colors || []);
   const sits = new Set(item.situations || []);
   const seasons = new Set(item.seasons || []);
@@ -95,13 +94,26 @@ export function openItem(item) {
     clear(subWrap).append(built.node);
   }
   paintSubs(currentSub);
-  section.input.addEventListener('change', () => paintSubs(null));
+
+  // Слой — вопрос только для торса: что на тело, что поверх, что наружу.
+  // У низа, обуви и аксессуаров слой берётся из раздела и не показывается.
+  const layers = new Set((item.slots || []).filter((sl) => LAYERS.some((l) => l.id === sl)));
+  const layerWrap = el('div');
+  const paintLayer = () => {
+    const show = SECTIONS_WITH_LAYER.has(section.input.value);
+    layerWrap.hidden = !show;
+    clear(layerWrap);
+    if (show) layerWrap.append(chipGroup('Слой', LAYERS, layers));
+  };
+  paintLayer();
+
+  section.input.addEventListener('change', () => { paintSubs(null); paintLayer(); });
 
   const material = textField('Материал', item.material);
   const fmin = selectField('Формальность от', FORMALITY, item.formality_min);
   const fmax = selectField('Формальность до', FORMALITY, item.formality_max);
-  const tmin = textField('Температура от, °C', item.temp_min, { type: 'number', inputmode: 'numeric' });
-  const tmax = textField('Температура до, °C', item.temp_max, { type: 'number', inputmode: 'numeric' });
+  const tmin = textField('от, °C', item.temp_min, { type: 'number', inputmode: 'numeric' });
+  const tmax = textField('до, °C', item.temp_max, { type: 'number', inputmode: 'numeric' });
   const status = selectField('Статус', STATUSES, item.status);
   const water = checkField('Непромокаемая', item.water_resistant);
   const wind = checkField('Ветрозащита', item.wind_resistant);
@@ -117,20 +129,23 @@ export function openItem(item) {
     brand.node,
     section.node,
     subWrap,
+    layerWrap,
     chipGroup('Сезон', SEASONS, seasons),
     chipGroup('Ситуации', SITUATIONS, sits),
     chipGroup('Цвета (до трёх)', COLORS, colors, { max: 3 }),
     material.node,
     el('div', { class: 'row2' }, [fmin.node, fmax.node]),
-    el('div', { class: 'row2' }, [tmin.node, tmax.node]),
+    el('div', { class: 'group' }, [
+      el('p', { class: 'group-label', text: 'Температура, когда сверху ничего нет' }),
+      el('div', { class: 'row2' }, [tmin.node, tmax.node]),
+    ]),
     status.node,
     water.node,
     wind.node,
     sleeveless.node,
     el('label', { class: 'field' }, [el('span', { text: 'Заметка' }), notes]),
     el('details', { class: 'advanced' }, [
-      el('summary', { text: 'Для алгоритма подбора' }),
-      chipGroup('Слоты — каким слоем вещь встаёт в лук', SLOTS, slots, { max: 3 }),
+      el('summary', { text: 'Откуда карточка' }),
       el('p', { class: 'muted small', text: `С доски: ${item.board_caption || '—'}` }),
       el('p', { class: 'muted small', text: `Файл: ${item.source_file}` }),
     ]),
@@ -139,12 +154,16 @@ export function openItem(item) {
   const saveBtn = $('#sheet-save');
   saveBtn.onclick = async () => {
     const sub = subSelect.value;
+    const sectionId = section.input.value;
+    const slots = SECTIONS_WITH_LAYER.has(sectionId)
+      ? [...layers]
+      : [SLOT_BY_SECTION[sectionId]].filter(Boolean);
     const patch = {
       title: title.input.value.trim(),
       brand: brand.input.value.trim() || null,
       subcategory: sub,
       category: CATEGORY_BY_SUB[sub] || item.category,
-      slots: [...slots],
+      slots,
       colors: [...colors],
       seasons: [...seasons],
       situations: [...sits],
@@ -181,7 +200,7 @@ export function openItem(item) {
 
 function validate(p) {
   if (!p.title) return 'Название не может быть пустым';
-  if (!p.slots.length) return 'В «Для алгоритма подбора» нужен хотя бы один слот';
+  if (!p.slots.length) return 'Выбери хотя бы один слой: на тело, поверх или наружу';
   if (!p.colors.length) return 'Выбери хотя бы один цвет';
   if (!p.seasons.length) return 'Выбери хотя бы один сезон';
   if (p.formality_min > p.formality_max) return 'Формальность «от» больше, чем «до»';

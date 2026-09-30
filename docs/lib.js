@@ -28,16 +28,28 @@ export const SITUATIONS = [
   { id: 'office', label: 'Офис' },
   { id: 'weekend', label: 'Выходные' },
   { id: 'evening', label: 'Вечерний выход' },
+  { id: 'home', label: 'Дом' },
 ];
 
 export const SLOTS = [
-  { id: 'base', label: 'База' },
-  { id: 'layer2', label: '2-й слой' },
-  { id: 'outer', label: 'Верх' },
+  { id: 'base', label: 'На тело' },
+  { id: 'layer2', label: 'Поверх' },
+  { id: 'outer', label: 'Наружу' },
   { id: 'bottom', label: 'Низ' },
   { id: 'shoes', label: 'Обувь' },
   { id: 'accessory', label: 'Аксессуар' },
 ];
+
+/** Слой — это про торс: что на тело, что поверх, что наружу.
+ *  У низа, обуви и аксессуаров выбора нет, слой берётся из раздела. */
+export const LAYERS = [
+  { id: 'base', label: 'На тело' },
+  { id: 'layer2', label: 'Поверх' },
+  { id: 'outer', label: 'Наружу' },
+];
+
+export const SLOT_BY_SECTION = { bottom: 'bottom', shoes: 'shoes', accessories: 'accessory' };
+export const SECTIONS_WITH_LAYER = new Set(['top', 'outerwear']);
 
 export const CATEGORIES = [
   { id: 'tshirt', label: 'Футболка' },

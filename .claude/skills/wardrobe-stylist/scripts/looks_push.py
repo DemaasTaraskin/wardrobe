@@ -88,6 +88,16 @@ def check_look(look: dict, by_ref: dict) -> tuple[list[str], list[str], dict]:
         errors.append(f"на {band[0]}…{band[1]} нужен слой outer")
 
     flat = [(slot, it) for slot in SLOT_ORDER for it in comp.get(slot, [])]
+
+    # Температура вещи — это «когда сверху ничего нет». Поэтому проверяем её
+    # только у самых верхних слоёв: футболка под джемпером и курткой с погодой
+    # не спорит, а низ и обувь всегда снаружи.
+    covered = set()
+    torso = [sl for sl in ("base", "layer2", "outer") if comp.get(sl)]
+    if len(torso) > 1:
+        for sl in torso[:-1]:
+            covered.update(it["id"] for it in comp[sl])
+
     seen: dict[str, str] = {}
     for slot, it in flat:
         if it["id"] in seen:
@@ -101,7 +111,9 @@ def check_look(look: dict, by_ref: dict) -> tuple[list[str], list[str], dict]:
             warns.append(f"{it['title']}: категория {it['category']} необычна для слота {slot}")
         if look["situation"] not in it["situations"]:
             errors.append(f"{it['title']} не для ситуации {look['situation']}")
-        if it["temp_max"] < band[0] or it["temp_min"] > band[1]:
+        if it["id"] in covered:
+            pass  # вещь под другим слоем: её диапазон к погоде не относится
+        elif it["temp_max"] < band[0] or it["temp_min"] > band[1]:
             errors.append(f"{it['title']} ({it['temp_min']}…{it['temp_max']}) "
                           f"не пересекается с бандом {band[0]}…{band[1]}")
         elif it["temp_min"] > band[0] or it["temp_max"] < band[1]:
