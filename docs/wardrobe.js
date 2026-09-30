@@ -1,4 +1,5 @@
-// Экран «Гардероб»: разделы двух уровней, фильтры и список «Необходима верификация».
+// Экран «Гардероб»: три полосы (раздел 1 уровня, подраздел, ситуация),
+// сетка по подразделам и список «Необходима верификация».
 import {
   sb, state, SITUATIONS, COLORS, STATUSES,
   el, $, clear, photoUrls, photoImg, labelOf, errText, prefs,
@@ -7,11 +8,12 @@ import { SECTIONS, SEASONS, subOfItem, subLabel, sectionOf } from './sections.js
 import { openItem, setItemContext, initZoom } from './item.js';
 
 const filters = {
+  section: prefs.get('wd-section', null),
   sub: prefs.get('wd-sub', null),
+  situation: prefs.get('wd-situation', 'all'),
   status: prefs.get('wd-status', 'all'),
   seasons: new Set(prefs.get('wd-seasons', [])),
   colors: new Set(prefs.get('wd-colors', [])),
-  situation: prefs.get('wd-situation', 'all'),
   unverifiedOnly: false,
   query: '',
 };
@@ -20,11 +22,12 @@ let urls = new Map();
 let collapsed = new Set(prefs.get('wd-collapsed', []));
 
 function saveFilters() {
+  prefs.set('wd-section', filters.section);
   prefs.set('wd-sub', filters.sub);
+  prefs.set('wd-situation', filters.situation);
   prefs.set('wd-status', filters.status);
   prefs.set('wd-seasons', [...filters.seasons]);
   prefs.set('wd-colors', [...filters.colors]);
-  prefs.set('wd-situation', filters.situation);
 }
 
 export function initWardrobe() {
@@ -37,7 +40,6 @@ export function initWardrobe() {
     filters.status = 'all';
     filters.seasons.clear();
     filters.colors.clear();
-    filters.situation = 'all';
     saveFilters();
     openFilters();
     render();
@@ -70,7 +72,7 @@ export async function showWardrobe() {
 
 // ------------------------------------------------------------------ отбор
 
-/** Всё, кроме фильтра по подразделу: по этому набору считаются цифры в полоске разделов. */
+/** Всё, кроме раздела и подраздела: по этому набору считаются цифры в полосах. */
 function matchesCommon(i) {
   if (filters.unverifiedOnly && i.verified) return false;
   if (filters.status !== 'all' && i.status !== filters.status) return false;
@@ -84,57 +86,65 @@ function matchesCommon(i) {
   return true;
 }
 
-const visibleItems = () => (state.items || []).filter(matchesCommon);
+const baseItems = () => (state.items || []).filter(matchesCommon);
+
+function applySections(rows) {
+  return rows.filter((i) => {
+    const sub = subOfItem(i);
+    if (filters.sub) return sub === filters.sub;
+    if (filters.section) return sectionOf(sub) === filters.section;
+    return true;
+  });
+}
 
 // ------------------------------------------------------------------ отрисовка
 
 function render() {
-  const rows = visibleItems();
+  const rows = baseItems();
   renderVerifyRow();
-  renderSectionBar(rows);
+  renderBars(rows);
   renderActiveFilters();
 
-  const shown = filters.sub ? rows.filter((i) => subOfItem(i) === filters.sub) : rows;
+  const shown = applySections(rows);
   $('#wd-count').textContent = `${shown.length} из ${(state.items || []).length} вещей`;
 
   const box = clear($('#wd-groups'));
   if (!shown.length) {
     box.append(el('p', { class: 'empty', text: 'Ничего не нашлось' }));
-    return;
-  }
+  } else {
+    const order = SECTIONS.flatMap((s) => s.subs.map((x) => x.id));
+    const groups = new Map();
+    for (const item of shown) {
+      const sub = subOfItem(item) || 'unknown';
+      if (!groups.has(sub)) groups.set(sub, []);
+      groups.get(sub).push(item);
+    }
+    const sorted = [...groups.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
 
-  // группировка по подразделу, порядок — как в справочнике
-  const order = SECTIONS.flatMap((s) => s.subs.map((x) => x.id));
-  const groups = new Map();
-  for (const item of shown) {
-    const sub = subOfItem(item) || 'unknown';
-    if (!groups.has(sub)) groups.set(sub, []);
-    groups.get(sub).push(item);
-  }
-  const sorted = [...groups.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+    for (const [sub, items] of sorted) {
+      const isCollapsed = collapsed.has(sub);
+      const head = el('button', {
+        class: 'group-head', type: 'button', dataset: { section: sectionOf(sub) || '' },
+        onclick: () => {
+          if (collapsed.has(sub)) collapsed.delete(sub); else collapsed.add(sub);
+          prefs.set('wd-collapsed', [...collapsed]);
+          render();
+        },
+      }, [
+        el('span', { class: 'group-name', text: subLabel(sub) }),
+        el('span', { class: 'group-count', text: String(items.length) }),
+        el('span', { class: 'group-chevron', text: isCollapsed ? '▸' : '▾' }),
+      ]);
 
-  for (const [sub, items] of sorted) {
-    const isCollapsed = collapsed.has(sub);
-    const head = el('button', {
-      class: 'group-head', type: 'button', dataset: { section: sectionOf(sub) || '' },
-      onclick: () => {
-        if (collapsed.has(sub)) collapsed.delete(sub); else collapsed.add(sub);
-        prefs.set('wd-collapsed', [...collapsed]);
-        render();
-      },
-    }, [
-      el('span', { class: 'group-name', text: subLabel(sub) }),
-      el('span', { class: 'group-count', text: String(items.length) }),
-      el('span', { class: 'group-chevron', text: isCollapsed ? '▸' : '▾' }),
-    ]);
-
-    const grid = el('div', { class: 'grid' }, isCollapsed ? [] : items.map(itemCard));
-    box.append(el('section', { class: 'wd-group', dataset: { sub } }, [head, grid]));
+      const grid = el('div', { class: 'grid' }, isCollapsed ? [] : items.map(itemCard));
+      box.append(el('section', { class: 'wd-group', dataset: { sub } }, [head, grid]));
+    }
   }
 
   measureHead();
   currentSection = null;
-  onScroll();
+  if (filters.section || filters.sub) scrollBarsTo(filters.section || sectionOf(filters.sub));
+  else onScroll();
 }
 
 /** Заголовки разделов липнут ровно под шапкой, какой бы высоты она ни получилась. */
@@ -174,38 +184,87 @@ function renderVerifyRow() {
   ]));
 }
 
-/** Полоска подразделов. Ярлык раздела 1 уровня прилипает слева, пока едут его подразделы. */
-function renderSectionBar(rows) {
-  const counts = new Map();
+// ------------------------------------------------------------------ три полосы
+
+function chip(label, isOn, onclick, { count, section, sub } = {}) {
+  const dataset = {};
+  if (section) dataset.section = section;
+  if (sub) dataset.sub = sub;
+  return el('button', {
+    class: 'chip chip-small' + (isOn ? ' is-on' : ''),
+    type: 'button', dataset, onclick,
+  }, [label, count === undefined ? null : el('span', { class: 'chip-count', text: String(count) })]);
+}
+
+function renderBars(rows) {
+  const bySub = new Map();
+  const bySection = new Map();
   for (const i of rows) {
     const sub = subOfItem(i);
-    counts.set(sub, (counts.get(sub) || 0) + 1);
+    const section = sectionOf(sub);
+    bySub.set(sub, (bySub.get(sub) || 0) + 1);
+    bySection.set(section, (bySection.get(section) || 0) + 1);
   }
 
-  const bar = clear($('#wd-section-bar'));
-  bar.append(el('button', {
-    class: 'chip chip-small' + (filters.sub ? '' : ' is-on'),
-    type: 'button',
-    onclick: () => { filters.sub = null; saveFilters(); render(); },
-    text: 'Все',
+  // 1. раздел 1 уровня: куртки · верх · низ · обувь · аксессуары
+  const bar1 = clear($('#wd-level1'));
+  bar1.append(chip('Все', !filters.section && !filters.sub, () => {
+    filters.section = null;
+    filters.sub = null;
+    saveFilters();
+    render();
   }));
-
   for (const section of SECTIONS) {
-    const subs = section.subs.filter((s) => counts.get(s.id));
-    if (!subs.length) continue;
-    bar.append(el('span', { class: 'section-tag', dataset: { section: section.id }, text: section.label }));
-    for (const sub of subs) {
-      bar.append(el('button', {
-        class: 'chip chip-small' + (filters.sub === sub.id ? ' is-on' : ''),
-        type: 'button',
-        dataset: { sub: sub.id, section: section.id },
-        onclick: () => {
-          filters.sub = filters.sub === sub.id ? null : sub.id;
-          saveFilters();
-          render();
-        },
-      }, [sub.label, el('span', { class: 'chip-count', text: String(counts.get(sub.id)) })]));
+    const n = bySection.get(section.id) || 0;
+    if (!n) continue;
+    bar1.append(chip(section.label, filters.section === section.id, () => {
+      const same = filters.section === section.id && !filters.sub;
+      filters.section = same ? null : section.id;   // тот же раздел вторым тапом снимается
+      filters.sub = null;
+      saveFilters();
+      render();
+    }, { count: n, section: section.id }));
+  }
+
+  // 2. подразделы — в том же порядке; полоса сама подъезжает к выбранному разделу
+  const bar2 = clear($('#wd-level2'));
+  for (const section of SECTIONS) {
+    for (const sub of section.subs) {
+      const n = bySub.get(sub.id) || 0;
+      if (!n) continue;
+      bar2.append(chip(sub.label, filters.sub === sub.id, () => {
+        if (filters.sub === sub.id) {
+          filters.sub = null;
+        } else {
+          filters.sub = sub.id;
+          filters.section = section.id;
+        }
+        saveFilters();
+        render();
+      }, { count: n, section: section.id, sub: sub.id }));
     }
+  }
+
+  // 3. ситуация: на экране остаётся только то, что ей подходит
+  const bar3 = clear($('#wd-situations'));
+  for (const s of [{ id: 'all', label: 'Любая ситуация' }, ...SITUATIONS]) {
+    bar3.append(chip(s.label, filters.situation === s.id, () => {
+      filters.situation = s.id;
+      saveFilters();
+      render();
+    }));
+  }
+}
+
+/** Подводит полосы к разделу: в первой — сам раздел, во второй — его первый подраздел. */
+function scrollBarsTo(sectionId) {
+  if (!sectionId) return;
+  for (const barId of ['#wd-level1', '#wd-level2']) {
+    const bar = $(barId);
+    const chipEl = bar.querySelector(`.chip[data-section="${sectionId}"]`);
+    if (!chipEl) continue;
+    const left = Math.max(0, chipEl.offsetLeft - 8);
+    if (Math.abs(bar.scrollLeft - left) > 12) bar.scrollTo({ left, behavior: 'smooth' });
   }
 }
 
@@ -213,7 +272,6 @@ function renderActiveFilters() {
   const box = clear($('#wd-active-filters'));
   const bits = [];
   if (filters.status !== 'all') bits.push(labelOf(STATUSES, filters.status));
-  if (filters.situation !== 'all') bits.push(labelOf(SITUATIONS, filters.situation));
   for (const s of filters.seasons) bits.push(labelOf(SEASONS, s));
   for (const c of filters.colors) bits.push(labelOf(COLORS, c));
   if (!bits.length) return;
@@ -222,7 +280,6 @@ function renderActiveFilters() {
     class: 'link-btn', type: 'button', text: 'сбросить',
     onclick: () => {
       filters.status = 'all';
-      filters.situation = 'all';
       filters.seasons.clear();
       filters.colors.clear();
       saveFilters();
@@ -231,12 +288,13 @@ function renderActiveFilters() {
   }));
 }
 
-/** Пока листаешь сетку, в полоске подсвечивается раздел 1 уровня, который сейчас на экране. */
+/** Пока листаешь сетку без выбранного раздела, полосы едут за тем, что на экране. */
 let scrollTimer = 0;
 function onScroll() {
   if (scrollTimer) return;
   scrollTimer = setTimeout(() => {
     scrollTimer = 0;
+    if (filters.section || filters.sub) return;
     const heads = document.querySelectorAll('.group-head');
     if (!heads.length) return;
     const limit = (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--head-h'), 10) || 150) + 12;
@@ -252,20 +310,11 @@ window.addEventListener('scroll', onScroll, { passive: true });
 let currentSection = null;
 function highlightSection(sectionId) {
   if (sectionId === currentSection) return;
-  for (const tag of document.querySelectorAll('.section-tag')) {
-    const on = tag.dataset.section === sectionId;
-    tag.classList.toggle('is-current', on);
-    if (on) {
-      // полоска сама подъезжает к разделу, который сейчас на экране
-      const bar = $('#wd-section-bar');
-      const left = Math.max(0, tag.offsetLeft - 8);
-      if (Math.abs(bar.scrollLeft - left) > 24) bar.scrollTo({ left, behavior: 'smooth' });
-    }
-  }
-  for (const chip of document.querySelectorAll('#wd-section-bar .chip[data-section]')) {
-    chip.classList.toggle('is-dim', !!sectionId && chip.dataset.section !== sectionId && !chip.classList.contains('is-on'));
-  }
   currentSection = sectionId;
+  for (const chipEl of document.querySelectorAll('#wd-level1 .chip[data-section]')) {
+    chipEl.classList.toggle('is-current', chipEl.dataset.section === sectionId);
+  }
+  scrollBarsTo(sectionId);
 }
 
 // ------------------------------------------------------------------ дополнительные фильтры
@@ -292,17 +341,17 @@ function openFilters() {
   const multi = (label, options, set) => {
     const row = el('div', { class: 'chips' });
     for (const o of options) {
-      const chip = el('button', {
+      const chipEl = el('button', {
         class: 'chip chip-small' + (set.has(o.id) ? ' is-on' : ''),
         type: 'button',
         onclick: () => {
           if (set.has(o.id)) set.delete(o.id); else set.add(o.id);
-          chip.classList.toggle('is-on', set.has(o.id));
+          chipEl.classList.toggle('is-on', set.has(o.id));
           saveFilters();
           render();
         },
       }, [o.hex ? el('span', { class: 'swatch', style: `background:${o.hex}` }) : null, o.label]);
-      row.append(chip);
+      row.append(chipEl);
     }
     return el('div', { class: 'group' }, [el('p', { class: 'group-label', text: label }), row]);
   };
@@ -310,8 +359,6 @@ function openFilters() {
   body.append(
     single('Статус', [{ id: 'all', label: 'Любой' }, ...STATUSES], () => filters.status,
       (id) => { filters.status = id; saveFilters(); }),
-    single('Ситуация', [{ id: 'all', label: 'Любая' }, ...SITUATIONS], () => filters.situation,
-      (id) => { filters.situation = id; saveFilters(); }),
     multi('Сезон', SEASONS, filters.seasons),
     multi('Цвет', COLORS, filters.colors),
   );

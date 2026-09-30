@@ -10,6 +10,17 @@
 
 export const SECTIONS = [
   {
+    id: 'outerwear',
+    label: 'Куртки',
+    subs: [
+      { id: 'bomber', label: 'Бомберы' },
+      { id: 'jacket', label: 'Куртки' },
+      { id: 'raincoat', label: 'Плащи и ветровки' },
+      { id: 'coat', label: 'Пальто' },
+      { id: 'puffer', label: 'Пуховики' },
+    ],
+  },
+  {
     id: 'top',
     label: 'Верх',
     subs: [
@@ -24,17 +35,6 @@ export const SECTIONS = [
       { id: 'hoodie', label: 'Худи' },
       { id: 'vest', label: 'Безрукавки' },
       { id: 'blazer', label: 'Пиджаки' },
-    ],
-  },
-  {
-    id: 'outerwear',
-    label: 'Куртки',
-    subs: [
-      { id: 'bomber', label: 'Бомберы' },
-      { id: 'jacket', label: 'Куртки' },
-      { id: 'raincoat', label: 'Плащи и ветровки' },
-      { id: 'coat', label: 'Пальто' },
-      { id: 'puffer', label: 'Пуховики' },
     ],
   },
   {

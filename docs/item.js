@@ -67,6 +67,9 @@ export function openItem(item) {
   const sits = new Set(item.situations || []);
   const seasons = new Set(item.seasons || []);
 
+  const analogsBtn = el('button', { class: 'btn btn-wide', type: 'button', onclick: () => openAnalogs(item) },
+    ['Показать аналоги']);
+
   // фото: тап открывает на весь экран с увеличением
   const photo = el('button', {
     class: 'sheet-photo', type: 'button',
@@ -106,11 +109,9 @@ export function openItem(item) {
   const notes = el('textarea', { rows: 3 });
   notes.value = item.notes || '';
 
-  const analogsBtn = el('button', { class: 'btn btn-wide', type: 'button', onclick: () => openAnalogs(item) },
-    ['Показать аналоги']);
-
   body.append(
     photo,
+    analogsBtn,
     item.verified ? el('p', { class: 'badge-line', text: '✓ проверено' }) : el('p', { class: 'badge-line badge-warn', text: 'Ждёт проверки — сохранение снимет отметку' }),
     title.node,
     brand.node,
@@ -127,7 +128,6 @@ export function openItem(item) {
     wind.node,
     sleeveless.node,
     el('label', { class: 'field' }, [el('span', { text: 'Заметка' }), notes]),
-    analogsBtn,
     el('details', { class: 'advanced' }, [
       el('summary', { text: 'Для алгоритма подбора' }),
       chipGroup('Слоты — каким слоем вещь встаёт в лук', SLOTS, slots, { max: 3 }),
@@ -269,11 +269,16 @@ export function initZoom() {
     if (e.touches.length === 0) { zoomState.startDist = 0; zoomState.panFrom = null; }
   });
 
-  // двойной тап — вернуть как было; на мышке работает двойной клик
+  // двойной тап приближает, второй двойной — возвращает как было
   let lastTap = 0;
   stage.addEventListener('click', () => {
     const now = Date.now();
-    if (now - lastTap < 320) { zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0; apply(); }
+    if (now - lastTap < 320) {
+      zoomState.scale = zoomState.scale > 1 ? 1 : 2.5;
+      zoomState.x = 0;
+      zoomState.y = 0;
+      apply();
+    }
     lastTap = now;
   });
 

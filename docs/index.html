@@ -96,7 +96,9 @@
       <button class="btn btn-small" id="btn-more-filters">Фильтры</button>
     </div>
     <div id="wd-verify-row" class="verify-row" hidden></div>
-    <div id="wd-section-bar" class="section-bar"></div>
+    <div id="wd-level1" class="section-bar"></div>
+    <div id="wd-level2" class="section-bar"></div>
+    <div id="wd-situations" class="section-bar"></div>
     <div id="wd-active-filters" class="active-filters"></div>
   </div>
   </div>
@@ -203,7 +205,7 @@
 // выкладки можно получить новую разметку со старым кодом. Если версия сборки не
 // совпала — один раз перекачиваем оболочку мимо кэша и перезагружаемся.
 window.addEventListener('load', async () => {
-  if (window.__wardrobeBuild === '2026-09-30') return;
+  if (window.__wardrobeBuild === '2026-09-30-2') return;
   if (sessionStorage.getItem('wardrobe-refreshed')) return;
   try {
     sessionStorage.setItem('wardrobe-refreshed', '1');
