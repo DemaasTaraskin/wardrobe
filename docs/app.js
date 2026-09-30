@@ -1,7 +1,7 @@
 // Точка входа: вход по паролю, вкладки, запуск экранов.
 // Версия сборки: её же ждёт index.html. Меняются оба места вместе —
 // по несовпадению приложение понимает, что браузер подсунул старый файл.
-window.__wardrobeBuild = '2026-09-30-3';
+window.__wardrobeBuild = '2026-09-30-4';
 import { sb, state, $, toast, showScreen, errText, prefs } from './lib.js';
 import { initPick, runPick } from './pick.js';
 import { initWardrobe, showWardrobe, loadItems } from './wardrobe.js';
@@ -159,7 +159,9 @@ function initChrome() {
 
   $('#btn-logout').addEventListener('click', async () => {
     $('#menu').hidden = true;
-    await sb.auth.signOut();
+    // scope: 'local' — гасим только этот браузер. По умолчанию Supabase
+    // отзывает все сессии пользователя, включая рабочую сессию скила.
+    await sb.auth.signOut({ scope: 'local' });
     location.reload();
   });
 }

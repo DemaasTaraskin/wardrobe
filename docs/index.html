@@ -206,7 +206,7 @@
 // выкладки можно получить новую разметку со старым кодом. Если версия сборки не
 // совпала — один раз перекачиваем оболочку мимо кэша и перезагружаемся.
 window.addEventListener('load', async () => {
-  if (window.__wardrobeBuild === '2026-09-30-3') return;
+  if (window.__wardrobeBuild === '2026-09-30-4') return;
   if (sessionStorage.getItem('wardrobe-refreshed')) return;
   try {
     sessionStorage.setItem('wardrobe-refreshed', '1');
