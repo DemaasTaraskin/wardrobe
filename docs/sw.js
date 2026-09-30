@@ -1,6 +1,6 @@
 // Оболочка приложения кэшируется, чтобы открывалось мгновенно и без сети.
 // Данные и фото из Supabase не кэшируются никогда: ссылки подписаны на час, а строки меняются.
-const CACHE = 'wardrobe-v2';
+const CACHE = 'wardrobe-v3';
 const SHELL = [
   './',
   'index.html',
@@ -18,7 +18,10 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' — берём с сервера, а не из HTTP-кэша браузера
+  e.waitUntil(caches.open(CACHE)
+    .then((c) => c.addAll(SHELL.map((f) => new Request(f, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -40,7 +43,8 @@ self.addEventListener('fetch', (e) => {
 
   // Свежее важнее быстрого: сеть, а кэш — запасной аэродром.
   e.respondWith(
-    fetch(request)
+    // свой файл берём мимо HTTP-кэша браузера; переход по адресу он и так проверяет
+    fetch(isShell && request.mode !== 'navigate' ? new Request(request, { cache: 'no-store' }) : request)
       .then((resp) => {
         const copy = resp.clone();
         caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
