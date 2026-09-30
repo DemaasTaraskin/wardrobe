@@ -6,7 +6,11 @@
   python push.py --photos skip   — только карточки, без фото
   python push.py --photos all    — перезалить все фото, даже неизменившиеся
 
+  python push.py --force-verified — переписать и то, что владелец уже проверил
+
 Вещь узнаётся по source_file: повторный запуск правит карточку, а не плодит вторую.
+Карточки с verified = true скрипт не трогает: их проверил владелец в приложении,
+и они для нас вход, а не выход. Фото заливаются всем.
 Оригиналы из wardrobe-photos никуда не копируются — в базу идёт сжатая копия
 (~800 px, WebP с прозрачностью).
 """
@@ -29,7 +33,8 @@ MAX_SIDE = 800
 QUALITY = 82
 
 FIELDS = [
-    "source_file", "title", "brand", "category", "slots", "colors", "pattern",
+    "source_file", "title", "brand", "category", "subcategory", "seasons",
+    "slots", "colors", "pattern",
     "material", "logo", "formality_min", "formality_max", "temp_min", "temp_max",
     "situations", "water_resistant", "wind_resistant", "sleeveless", "status",
     "board_group", "board_caption", "notes",
@@ -59,6 +64,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--photos", choices=["auto", "skip", "all"], default="auto")
+    ap.add_argument("--force-verified", action="store_true",
+                    help="переписать карточки, которые владелец уже проверил")
     args = ap.parse_args()
 
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -86,11 +93,19 @@ def main() -> int:
     c = sb.Client()
     sb.say(f"Вход: {c.email}")
     existing = {r["source_file"]: r for r in
-                c.select("items", select="id,source_file,photo_path", limit="2000")}
+                c.select("items", select="id,source_file,photo_path,verified", limit="2000")}
+
+    # проверенное владельцем — источник правды, каталогом не перезаписываем
+    protected = {i["source_file"] for i in items
+                 if existing.get(i["source_file"], {}).get("verified")} if not args.force_verified else set()
 
     rows = []
     for i in items:
-        row = {k: i.get(k) for k in FIELDS}
+        if i["source_file"] in protected:
+            continue
+        # только то, что в каталоге реально есть: иначе пустой ключ затрёт
+        # поле, проставленное скриптом разметки или приложением
+        row = {k: i[k] for k in FIELDS if k in i}
         row["user_id"] = c.user_id
         rows.append(row)
 
@@ -100,6 +115,12 @@ def main() -> int:
                           prefer="return=representation") or []
     added = [r for r in saved if r["source_file"] not in existing]
     sb.say(f"Карточки: добавлено {len(added)}, обновлено {len(saved) - len(added)}")
+    if protected:
+        sb.say(f"Не тронуто проверенных владельцем: {len(protected)} "
+               f"(--force-verified перезапишет и их)")
+
+    # фото заливаем всем, включая проверенные: фото правит только push
+    saved += [existing[sf] for sf in protected]
 
     if args.photos == "skip":
         return 0

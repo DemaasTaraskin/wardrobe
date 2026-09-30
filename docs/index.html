@@ -19,31 +19,29 @@
 <section id="screen-auth" class="screen" hidden>
   <div class="auth-box">
     <h1 class="auth-title">Гардероб</h1>
-    <p class="auth-hint">Вход по почте. Регистрация закрыта: письмо придёт только на приглашённый адрес.</p>
 
-    <form id="auth-email-form" class="stack">
+    <form id="auth-form" class="stack">
       <label class="field">
         <span>Почта</span>
-        <input id="auth-email" type="email" inputmode="email" autocomplete="email" required placeholder="you@example.com">
+        <input id="auth-email" type="email" inputmode="email" autocomplete="username" required placeholder="you@example.com">
       </label>
-      <button class="btn btn-primary" type="submit">Прислать письмо</button>
-    </form>
-
-    <div id="auth-sent" class="stack" hidden>
-      <p class="auth-hint">Открой письмо на этом же телефоне и нажми в нём ссылку «Sign in» — приложение откроется уже с входом.</p>
-      <button class="btn btn-quiet" type="button" id="auth-show-code">В письме есть код? Ввести вручную</button>
-      <button class="btn btn-quiet" type="button" id="auth-back">Другая почта</button>
-    </div>
-
-    <form id="auth-code-form" class="stack" hidden>
       <label class="field">
-        <span>Код из письма</span>
-        <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="123456">
+        <span>Пароль</span>
+        <input id="auth-password" type="password" autocomplete="current-password" required placeholder="от 8 знаков">
       </label>
       <button class="btn btn-primary" type="submit">Войти</button>
+      <button class="btn btn-quiet" type="button" id="auth-by-link">Войти по ссылке на почту</button>
     </form>
 
+    <!-- запасной вход: письмо со ссылкой, если пароль ещё не задан или забыт -->
+    <div id="auth-link-box" class="stack" hidden>
+      <p class="auth-hint">Пришлю письмо со ссылкой «Sign in». Откроешь его на этом же телефоне — приложение пустит внутрь, и там можно будет задать пароль.</p>
+      <button class="btn" type="button" id="auth-send-link">Прислать письмо</button>
+      <button class="btn btn-quiet" type="button" id="auth-back-to-password">Назад к паролю</button>
+    </div>
+
     <p id="auth-msg" class="msg" hidden></p>
+    <p class="auth-hint">Регистрация закрыта: войти можно только с приглашённого адреса.</p>
   </div>
 </section>
 
@@ -86,28 +84,96 @@
 
 <!-- Гардероб -->
 <section id="screen-wardrobe" class="screen" hidden>
+  <div class="sticky-head" id="wd-sticky">
   <header class="topbar">
     <h1>Гардероб</h1>
     <button class="icon-btn" id="btn-menu-2" title="Ещё" aria-label="Ещё">⋯</button>
   </header>
+
+  <div class="wardrobe-head">
+    <div class="search-row">
+      <input id="wd-search" class="search" type="search" placeholder="Поиск по названию или бренду">
+      <button class="btn btn-small" id="btn-more-filters">Фильтры</button>
+    </div>
+    <div id="wd-verify-row" class="verify-row" hidden></div>
+    <div id="wd-section-bar" class="section-bar"></div>
+    <div id="wd-active-filters" class="active-filters"></div>
+  </div>
+  </div>
+
   <div class="pad">
-    <input id="wd-search" class="search" type="search" placeholder="Поиск по названию или бренду">
-    <div id="wd-filters" class="filters"></div>
     <p id="wd-count" class="muted small"></p>
-    <div id="wd-grid" class="grid"></div>
+    <div id="wd-groups"></div>
   </div>
 </section>
 
-<!-- Правка карточки -->
+<!-- Карточка вещи -->
 <div id="sheet" class="sheet" hidden>
   <div class="sheet-backdrop" data-close></div>
   <div class="sheet-card" role="dialog" aria-modal="true">
     <div class="sheet-head">
-      <button class="btn btn-quiet" data-close>Закрыть</button>
+      <button class="btn btn-quiet btn-back" data-close>‹ Назад</button>
       <strong id="sheet-title">Вещь</strong>
       <button class="btn btn-primary btn-small" id="sheet-save">Сохранить</button>
     </div>
     <div class="sheet-body" id="sheet-body"></div>
+  </div>
+</div>
+
+<!-- Аналоги -->
+<div id="analogs" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <button class="btn btn-quiet btn-back" data-close>‹ Назад</button>
+      <strong id="analogs-title">Аналоги</strong>
+      <span class="head-spacer"></span>
+    </div>
+    <div class="sheet-body" id="analogs-body"></div>
+  </div>
+</div>
+
+<!-- Дополнительные фильтры -->
+<div id="filters-sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <button class="btn btn-quiet btn-back" data-close>‹ Назад</button>
+      <strong>Фильтры</strong>
+      <button class="btn btn-small" id="filters-reset">Сбросить</button>
+    </div>
+    <div class="sheet-body" id="filters-body"></div>
+  </div>
+</div>
+
+<!-- Просмотр фото на весь экран -->
+<div id="zoom" class="zoom" hidden>
+  <button class="zoom-close" id="zoom-close" aria-label="Закрыть">✕</button>
+  <div class="zoom-stage" id="zoom-stage"><img id="zoom-img" alt=""></div>
+  <p class="zoom-hint">Двумя пальцами — приблизить, двойной тап — сброс</p>
+</div>
+
+<!-- Задать пароль -->
+<div id="password-sheet" class="sheet" hidden>
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card sheet-card-short" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <button class="btn btn-quiet btn-back" data-close>‹ Назад</button>
+      <strong>Пароль</strong>
+      <button class="btn btn-primary btn-small" id="password-save">Сохранить</button>
+    </div>
+    <div class="sheet-body">
+      <p class="muted small">Дальше сможешь входить почтой и паролем, без писем. Телефон предложит сохранить его — тогда вход будет по Face ID.</p>
+      <label class="field">
+        <span>Новый пароль (от 8 знаков)</span>
+        <input id="password-new" type="password" autocomplete="new-password">
+      </label>
+      <label class="field">
+        <span>Ещё раз</span>
+        <input id="password-again" type="password" autocomplete="new-password">
+      </label>
+      <p id="password-msg" class="msg" hidden></p>
+    </div>
   </div>
 </div>
 
@@ -117,6 +183,7 @@
   <div class="sheet-card sheet-card-short" role="dialog" aria-modal="true">
     <div class="sheet-body stack">
       <p class="muted small" id="menu-user"></p>
+      <button class="btn" id="btn-set-password">Задать пароль</button>
       <button class="btn" id="btn-refresh">Обновить данные</button>
       <button class="btn btn-quiet" id="btn-logout">Выйти</button>
     </div>

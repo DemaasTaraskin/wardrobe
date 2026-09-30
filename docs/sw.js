@@ -1,6 +1,6 @@
 // Оболочка приложения кэшируется, чтобы открывалось мгновенно и без сети.
 // Данные и фото из Supabase не кэшируются никогда: ссылки подписаны на час, а строки меняются.
-const CACHE = 'wardrobe-v1';
+const CACHE = 'wardrobe-v2';
 const SHELL = [
   './',
   'index.html',
@@ -9,6 +9,8 @@ const SHELL = [
   'lib.js',
   'pick.js',
   'wardrobe.js',
+  'item.js',
+  'sections.js',
   'config.js',
   'manifest.webmanifest',
   'icons/icon-192.png',

@@ -23,3 +23,5 @@ personal photo/
 looks_batch*.json
 __pycache__/
 *.pyc
+# локальные бэкапы перед крупными правками
+_backup/

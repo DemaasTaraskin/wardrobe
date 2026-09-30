@@ -1,7 +1,13 @@
-// Точка входа: вход по почте, вкладки, запуск экранов.
+// Точка входа: вход по паролю, вкладки, запуск экранов.
 import { sb, state, $, toast, showScreen, errText, prefs } from './lib.js';
 import { initPick, runPick } from './pick.js';
 import { initWardrobe, showWardrobe, loadItems } from './wardrobe.js';
+import { closeZoom } from './item.js';
+
+// Адрес читаем сразу: библиотека Supabase вычищает из него токены и ошибки
+// в ближайшей же микрозадаче, и сообщение «ссылка протухла» иначе теряется.
+const INITIAL_HASH = location.hash.slice(1);
+const INITIAL_QUERY = location.search.slice(1);
 
 let booted = false;
 
@@ -15,58 +21,93 @@ function authMsg(text, isError = false) {
 }
 
 function initAuth() {
-  const emailForm = $('#auth-email-form');
-  const codeForm = $('#auth-code-form');
-  const emailInput = $('#auth-email');
-  emailInput.value = prefs.get('email', '');
+  const form = $('#auth-form');
+  const linkBox = $('#auth-link-box');
+  const email = $('#auth-email');
+  const password = $('#auth-password');
+  email.value = prefs.get('email', '');
 
-  emailForm.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = emailInput.value.trim();
-    if (!email) return;
-    const btn = emailForm.querySelector('button');
+    const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
-    authMsg('Отправляю письмо…');
-    const { error } = await sb.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false, // регистрация закрыта: только приглашённые адреса
-        emailRedirectTo: location.origin + location.pathname,
-      },
+    authMsg('Проверяю…');
+    const { error } = await sb.auth.signInWithPassword({
+      email: email.value.trim(),
+      password: password.value,
     });
     btn.disabled = false;
-    if (error) { authMsg(errText(error), true); return; }
-    prefs.set('email', email);
-    authMsg('Письмо ушло.');
-    emailForm.hidden = true;
-    $('#auth-sent').hidden = false;
-  });
-
-  // Встроенная почта Supabase шлёт только ссылку; код появится, если когда-нибудь
-  // подключим свой SMTP и вернём в шаблон {{ .Token }}.
-  $('#auth-show-code').addEventListener('click', () => {
-    codeForm.hidden = false;
-    $('#auth-code').focus();
-  });
-
-  codeForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const token = $('#auth-code').value.replace(/\D/g, '');
-    if (token.length < 6) { authMsg('Код — шесть цифр', true); return; }
-    const btn = codeForm.querySelector('button');
-    btn.disabled = true;
-    authMsg('Проверяю код…');
-    const { error } = await sb.auth.verifyOtp({ email: emailInput.value.trim(), token, type: 'email' });
-    btn.disabled = false;
-    if (error) { authMsg(errText(error), true); return; }
+    if (error) {
+      const wrong = /Invalid login credentials/i.test(error.message || '');
+      authMsg(wrong
+        ? 'Почта или пароль не подошли. Если пароль ещё не задан — войди по ссылке на почту и задай его в меню «⋯».'
+        : errText(error), true);
+      return;
+    }
+    prefs.set('email', email.value.trim());
     authMsg('');
   });
 
-  $('#auth-back').addEventListener('click', () => {
-    codeForm.hidden = true;
-    $('#auth-sent').hidden = true;
-    emailForm.hidden = false;
+  $('#auth-by-link').addEventListener('click', () => {
+    form.hidden = true;
+    linkBox.hidden = false;
     authMsg('');
+  });
+
+  $('#auth-back-to-password').addEventListener('click', () => {
+    linkBox.hidden = true;
+    form.hidden = false;
+    authMsg('');
+  });
+
+  $('#auth-send-link').addEventListener('click', async (e) => {
+    const addr = email.value.trim();
+    if (!addr) { authMsg('Сначала впиши почту', true); form.hidden = false; linkBox.hidden = true; return; }
+    e.target.disabled = true;
+    authMsg('Отправляю письмо…');
+    const { error } = await sb.auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname },
+    });
+    e.target.disabled = false;
+    if (error) { authMsg(errText(error), true); return; }
+    prefs.set('email', addr);
+    authMsg('Письмо ушло. Открой его на этом же телефоне и нажми ссылку «Sign in».');
+  });
+}
+
+/** Пароль задаётся из приложения: аккаунт заведён приглашением и пароля не имеет. */
+function initPasswordSheet() {
+  const sheet = $('#password-sheet');
+  const first = $('#password-new');
+  const again = $('#password-again');
+  const msg = $('#password-msg');
+
+  $('#btn-set-password').addEventListener('click', () => {
+    $('#menu').hidden = true;
+    first.value = '';
+    again.value = '';
+    msg.hidden = true;
+    sheet.hidden = false;
+    first.focus();
+  });
+
+  $('#password-save').addEventListener('click', async () => {
+    const value = first.value;
+    const show = (text, isError = true) => {
+      msg.hidden = false;
+      msg.textContent = text;
+      msg.classList.toggle('err', isError);
+    };
+    if (value.length < 8) { show('Пароль должен быть от 8 знаков'); return; }
+    if (value !== again.value) { show('Пароли не совпали'); return; }
+
+    $('#password-save').disabled = true;
+    const { error } = await sb.auth.updateUser({ password: value });
+    $('#password-save').disabled = false;
+    if (error) { show(errText(error)); return; }
+    sheet.hidden = true;
+    toast('Пароль сохранён — дальше входи по нему');
   });
 }
 
@@ -83,8 +124,22 @@ function initChrome() {
     });
   }
   for (const node of document.querySelectorAll('[data-close]')) {
-    node.addEventListener('click', () => { $('#sheet').hidden = true; $('#menu').hidden = true; });
+    node.addEventListener('click', () => {
+      const sheet = node.closest('.sheet');
+      if (sheet) sheet.hidden = true;
+    });
   }
+  // Esc закрывает верхнюю шторку
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTop(); });
+
+  // пока открыта шторка, фон под ней не должен прокручиваться
+  const sheets = [...document.querySelectorAll('.sheet'), $('#zoom')];
+  const syncScrollLock = () => {
+    document.body.classList.toggle('sheet-open', sheets.some((s) => !s.hidden));
+  };
+  const watcher = new MutationObserver(syncScrollLock);
+  for (const s of sheets) watcher.observe(s, { attributes: true, attributeFilter: ['hidden'] });
+
   $('#btn-refresh').addEventListener('click', async () => {
     $('#menu').hidden = true;
     state.items = null;
@@ -98,11 +153,19 @@ function initChrome() {
       toast(errText(e));
     }
   });
+
   $('#btn-logout').addEventListener('click', async () => {
     $('#menu').hidden = true;
     await sb.auth.signOut();
     location.reload();
   });
+}
+
+function closeTop() {
+  if (!$('#zoom').hidden) { closeZoom(); return; }
+  for (const id of ['#analogs', '#filters-sheet', '#password-sheet', '#menu', '#sheet']) {
+    if (!$(id).hidden) { $(id).hidden = true; return; }
+  }
 }
 
 function openTab(name) {
@@ -127,9 +190,20 @@ async function start(user) {
   loadItems().catch(() => { /* сетка подгрузится при открытии вкладки */ });
 }
 
+function urlError() {
+  for (const raw of [INITIAL_HASH, INITIAL_QUERY]) {
+    if (!raw) continue;
+    const p = new URLSearchParams(raw);
+    const text = p.get('error_description') || p.get('error');
+    if (text) return decodeURIComponent(text).replace(/\+/g, ' ');
+  }
+  return null;
+}
+
 async function boot() {
   initAuth();
   initChrome();
+  initPasswordSheet();
 
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
@@ -137,6 +211,11 @@ async function boot() {
     await start(session.user);
   } else {
     showScreen('auth');
+    const problem = urlError();
+    if (problem) {
+      authMsg(`Ссылка из письма не сработала: ${problem}. Ссылки одноразовые и живут час — запроси новое письмо или войди по паролю.`, true);
+      cleanUrl();
+    }
   }
 
   sb.auth.onAuthStateChange((event, s) => {
@@ -146,13 +225,6 @@ async function boot() {
     }
     if (event === 'SIGNED_OUT') showScreen('auth');
   });
-
-  // ошибка из ссылки письма приходит в адресе
-  const hash = new URLSearchParams(location.hash.slice(1));
-  if (hash.get('error_description')) {
-    authMsg(decodeURIComponent(hash.get('error_description')).replace(/\+/g, ' '), true);
-    cleanUrl();
-  }
 }
 
 function cleanUrl() {
