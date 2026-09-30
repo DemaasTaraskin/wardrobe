@@ -31,6 +31,14 @@ export const SITUATIONS = [
   { id: 'home', label: 'Дом' },
 ];
 
+/** Зал и дом — в помещении: там всегда +20…+22°, а летом до +25°.
+ *  Уличная температура на подбор для них не влияет. */
+export const INDOOR_SITUATIONS = new Set(['gym', 'home']);
+
+export function indoorBand(season = '') {
+  return /summer|лето/i.test(season) ? { min: 20, max: 25 } : { min: 20, max: 22 };
+}
+
 export const SLOTS = [
   { id: 'base', label: 'На тело' },
   { id: 'layer2', label: 'Поверх' },

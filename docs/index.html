@@ -53,7 +53,7 @@
   </header>
 
   <div class="pad">
-    <div class="temp-row">
+    <div class="temp-row" id="temp-row">
       <button class="temp-step" id="temp-minus" aria-label="Холоднее">−</button>
       <div class="temp-value"><input id="temp" type="number" inputmode="numeric" step="1" min="-30" max="40" value="12"><span>°C</span></div>
       <button class="temp-step" id="temp-plus" aria-label="Теплее">+</button>
@@ -61,10 +61,14 @@
 
     <div id="situations" class="chips"></div>
 
-    <label class="switch">
-      <input type="checkbox" id="rain">
-      <span>Дождь</span>
-    </label>
+    <p id="indoor-hint" class="muted small indoor-hint" hidden></p>
+
+    <div id="rain-row">
+      <label class="switch">
+        <input type="checkbox" id="rain">
+        <span>Дождь</span>
+      </label>
+    </div>
 
     <button class="btn btn-primary btn-wide" id="btn-pick">Показать луки</button>
 
@@ -206,7 +210,7 @@
 // выкладки можно получить новую разметку со старым кодом. Если версия сборки не
 // совпала — один раз перекачиваем оболочку мимо кэша и перезагружаемся.
 window.addEventListener('load', async () => {
-  if (window.__wardrobeBuild === '2026-09-30-4') return;
+  if (window.__wardrobeBuild === '2026-09-30-6') return;
   if (sessionStorage.getItem('wardrobe-refreshed')) return;
   try {
     sessionStorage.setItem('wardrobe-refreshed', '1');

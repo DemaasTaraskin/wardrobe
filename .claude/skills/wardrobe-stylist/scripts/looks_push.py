@@ -32,8 +32,16 @@ from collections import defaultdict
 
 import sb
 
-SITUATIONS = ["gym", "dog", "office", "weekend", "evening"]
+SITUATIONS = ["gym", "dog", "office", "weekend", "evening", "home"]
 BANDS = [(5, 10), (10, 15), (15, 20)]
+
+# Зал и дом — в помещении: там всегда +20…+22°, летом до +25°. Уличные банды
+# к ним не применяются, лук на такую ситуацию собирается один раз на сезон.
+INDOOR = {"gym", "home"}
+
+
+def indoor_band(season: str) -> tuple[int, int]:
+    return (20, 25) if "summer" in season else (20, 22)
 REQUIRED_SLOTS = ["base", "bottom", "shoes"]
 SLOT_ORDER = ["base", "layer2", "outer", "bottom", "shoes", "accessory"]
 SLOT_CATEGORIES = {
@@ -48,7 +56,7 @@ NEUTRAL = {"black", "white", "ecru", "grey", "beige", "navy"}
 FIGURED = {"print", "stripe", "check"}
 
 
-def check_look(look: dict, by_ref: dict) -> tuple[list[str], list[str], dict]:
+def check_look(look: dict, by_ref: dict, season: str = "") -> tuple[list[str], list[str], dict]:
     """Возвращает (ошибки, предупреждения, разобранный состав slot → [вещь])."""
     errors: list[str] = []
     warns: list[str] = []
@@ -84,7 +92,12 @@ def check_look(look: dict, by_ref: dict) -> tuple[list[str], list[str], dict]:
     for slot in REQUIRED_SLOTS:
         if not comp.get(slot):
             errors.append(f"не заполнен обязательный слот {slot}")
-    if look["temp_max"] <= 15 and not comp.get("outer"):
+    if look["situation"] in INDOOR:
+        want = indoor_band(season)
+        if band != want:
+            errors.append(f"{look['situation']} — в помещении: банд должен быть "
+                          f"{want[0]}…{want[1]}, а не {band[0]}…{band[1]}")
+    elif look["temp_max"] <= 15 and not comp.get("outer"):
         errors.append(f"на {band[0]}…{band[1]} нужен слой outer")
 
     flat = [(slot, it) for slot in SLOT_ORDER for it in comp.get(slot, [])]
@@ -157,10 +170,11 @@ def coverage(c: sb.Client, season: str) -> None:
         return any(g["situation"] == s and g["temp_min"] <= hi and g["temp_max"] >= lo for g in gaps)
 
     sb.say(f"\nПокрытие сезона {season} (в скобках — сколько из них годятся в дождь):")
-    sb.say("ситуация   " + "".join(f"  {a}…{b}".ljust(12) for a, b in BANDS))
+    sb.say("ситуация   " + "".join(f"  {a}…{b}".ljust(12) for a, b in BANDS)
+           + f"  в помещении {indoor_band(season)[0]}…{indoor_band(season)[1]}")
     for s in SITUATIONS:
         cells = []
-        for band in BANDS:
+        for band in (BANDS if s not in INDOOR else [indoor_band(season)]):
             got = grid[(s, *band)]
             mark = "—" if not got else f"{len(got)} ({sum(1 for l in got if l['rain_ok'])})"
             if not got and has_gap(s, *band):
@@ -199,7 +213,7 @@ def main() -> int:
 
     bad = 0
     for n, look in enumerate(data["looks"], 1):
-        errors, warns, _ = check_look(look, by_ref)
+        errors, warns, _ = check_look(look, by_ref, season)
         head = f"[{n}] {look['situation']} {look['temp_min']}…{look['temp_max']}"
         if errors:
             bad += 1

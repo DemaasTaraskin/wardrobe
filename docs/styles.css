@@ -130,6 +130,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chip.is-on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 .chip-small { padding: 7px 11px; font-size: 13px; }
 
+.indoor-hint { margin: -4px 0 14px; }
+/* в помещении градусник ни при чём — показываем это приглушением */
+.temp-row.is-muted { opacity: .45; }
 .switch { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: 15px; }
 .switch input { width: 22px; height: 22px; accent-color: var(--accent); }
 

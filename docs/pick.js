@@ -1,6 +1,6 @@
 // Экран «Подобрать» и экран лука: оценка ❤️/👎 и кнопка «Надел сегодня».
 import {
-  sb, state, SITUATIONS, SLOTS, REASONS,
+  sb, state, SITUATIONS, SLOTS, REASONS, INDOOR_SITUATIONS, indoorBand,
   el, $, clear, toast, showScreen, photoUrls, photoImg,
   labelOf, tempLabel, todayISO, errText, prefs,
 } from './lib.js';
@@ -28,6 +28,8 @@ export function initPick() {
   $('#btn-pick').addEventListener('click', runPick);
   $('#look-back').addEventListener('click', () => showScreen('pick'));
 
+  paintIndoorHint();
+
   const box = clear($('#situations'));
   for (const s of SITUATIONS) {
     box.append(el('button', {
@@ -39,10 +41,23 @@ export function initPick() {
         ctx.situation = s.id;
         prefs.set('situation', s.id);
         for (const c of box.children) c.classList.toggle('is-on', c.dataset.sit === s.id);
+        paintIndoorHint();
         runPick();
       },
     }));
   }
+}
+
+/** В зале и дома градусник не участвует: прячем дождь и объясняем почему. */
+function paintIndoorHint() {
+  const indoor = INDOOR_SITUATIONS.has(ctx.situation);
+  const band = indoorBand(state.season);
+  $('#indoor-hint').hidden = !indoor;
+  $('#indoor-hint').textContent = indoor
+    ? `В помещении всегда +${band.min}…+${band.max}° — уличная температура на подбор не влияет.`
+    : '';
+  $('#rain-row').hidden = indoor;
+  $('#temp-row').classList.toggle('is-muted', indoor);
 }
 
 function setTemp(value) {
@@ -54,25 +69,35 @@ function setTemp(value) {
 
 // ------------------------------------------------------------------ подбор
 
+/** Температура, по которой ищем луки: на улице — та, что ввёл владелец,
+ *  в зале и дома — комнатная, градусник за окном там ни при чём. */
+function matchTemp() {
+  if (!INDOOR_SITUATIONS.has(ctx.situation)) return ctx.temp;
+  const band = indoorBand(state.season);
+  return Math.round((band.min + band.max) / 2);
+}
+
 async function fetchLooks({ spread = 0 }) {
+  const t = matchTemp();
   let q = sb.from('looks').select(LOOK_SELECT)
     .eq('season', state.season)
     .eq('situation', ctx.situation)
     .eq('status', 'active')
-    .lte('temp_min', ctx.temp + spread)
-    .gte('temp_max', ctx.temp - spread);
-  if (ctx.rain) q = q.eq('rain_ok', true);
+    .lte('temp_min', t + spread)
+    .gte('temp_max', t - spread);
+  if (ctx.rain && !INDOOR_SITUATIONS.has(ctx.situation)) q = q.eq('rain_ok', true);
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
 }
 
 async function fetchGaps() {
+  const t = matchTemp();
   let q = sb.from('gaps').select('*')
     .eq('season', state.season)
     .eq('situation', ctx.situation)
-    .lte('temp_min', ctx.temp)
-    .gte('temp_max', ctx.temp);
+    .lte('temp_min', t)
+    .gte('temp_max', t);
   const { data, error } = await q;
   if (error) throw error;
   let rows = data || [];
@@ -131,9 +156,12 @@ export async function runPick() {
 async function renderEmpty(box) {
   const sit = labelOf(SITUATIONS, ctx.situation);
   const gaps = await fetchGaps().catch(() => []);
-  box.append(el('div', { class: 'empty' }, [
-    el('p', { text: `На ${ctx.temp > 0 ? '+' : ''}${ctx.temp}° в ситуации «${sit}»${ctx.rain ? ' в дождь' : ''} луков пока нет.` }),
-  ]));
+  const indoor = INDOOR_SITUATIONS.has(ctx.situation);
+  const band = indoorBand(state.season);
+  const where = indoor
+    ? `В помещении (+${band.min}…+${band.max}°) для ситуации «${sit}»`
+    : `На ${ctx.temp > 0 ? '+' : ''}${ctx.temp}° в ситуации «${sit}»${ctx.rain ? ' в дождь' : ''}`;
+  box.append(el('div', { class: 'empty' }, [el('p', { text: `${where} луков пока нет.` })]));
   for (const g of gaps) {
     box.append(el('div', { class: 'gap-card' }, [
       el('strong', { text: 'Чего не хватает' }),
