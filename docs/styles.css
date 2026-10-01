@@ -102,6 +102,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text);
 }
 .field textarea { min-height: 84px; resize: vertical; }
+
+/* Поле с кнопкой знака: минус с телефонной клавиатуры не набрать */
+.with-sign { display: flex; gap: 8px; }
+.with-sign input { flex: 1; min-width: 0; }
+.sign-btn {
+  flex: 0 0 46px; min-height: 46px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); color: var(--text); font-size: 18px; cursor: pointer;
+}
 .msg { padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 14px; }
 .msg.err { border-color: var(--danger); color: var(--danger); }
 
@@ -208,6 +217,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* шторку тянем только по вертикали — иначе карточка дёргается вбок */
 .sheet-card { touch-action: pan-y; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* без этого поля держат свою ширину по умолчанию и вылезают за экран телефона */
+.row2 > * { min-width: 0; }
 .sheet-photo { background: var(--tile); border-radius: 14px; height: 180px; display: flex; align-items: center; justify-content: center; }
 .sheet-photo img { max-height: 100%; max-width: 100%; object-fit: contain; padding: 8px; }
 .swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(128,128,128,.4); display: inline-block; vertical-align: -2px; margin-right: 6px; }

@@ -1,7 +1,7 @@
 // Точка входа: вход по паролю, вкладки, запуск экранов.
 // Версия сборки: её же ждёт index.html. Меняются оба места вместе —
 // по несовпадению приложение понимает, что браузер подсунул старый файл.
-window.__wardrobeBuild = '2026-10-01-1';
+window.__wardrobeBuild = '2026-10-01-2';
 import { sb, state, $, toast, showScreen, errText, prefs } from './lib.js';
 import { initPick, runPick } from './pick.js';
 import { initWardrobe, showWardrobe, loadItems } from './wardrobe.js';

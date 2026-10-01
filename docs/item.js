@@ -22,6 +22,33 @@ function textField(label, value, { type = 'text', ...rest } = {}) {
   return { node: el('label', { class: 'field' }, [el('span', { text: label }), input]), input };
 }
 
+// Температура уходит в минус, а на телефоне цифровая клавиатура минус не даёт.
+// Поэтому знак ставит кнопка «±», а поле принимает только цифры и минус впереди.
+function tempField(label, value) {
+  const input = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: 4 });
+  input.value = value ?? '';
+  input.addEventListener('input', () => {
+    const clean = input.value
+      .replace(/[−–—]/g, '-')   // минус и тире из буфера обмена
+      .replace(/[.,].*$/, '')      // градусы целые: дробную часть отбрасываем
+      .replace(/[^\d-]/g, '')
+      .replace(/(?!^)-/g, '');
+    if (clean !== input.value) input.value = clean;
+  });
+
+  const sign = el('button', {
+    class: 'sign-btn', type: 'button', title: 'Плюс или минус', 'aria-label': 'Плюс или минус',
+    onclick: () => {
+      const v = input.value.trim();
+      input.value = v === '' ? '-' : v === '-' ? '' : v.startsWith('-') ? v.slice(1) : `-${v}`;
+      input.focus();
+    },
+  }, ['±']);
+
+  const row = el('div', { class: 'with-sign' }, [input, sign]);
+  return { node: el('label', { class: 'field' }, [el('span', { text: label }), row]), input };
+}
+
 function selectField(label, options, value) {
   const sel = el('select', {}, options.map((o) => {
     const opt = el('option', { value: String(o.id), text: o.label });
@@ -112,8 +139,8 @@ export function openItem(item) {
   const material = textField('Материал', item.material);
   const fmin = selectField('Формальность от', FORMALITY, item.formality_min);
   const fmax = selectField('Формальность до', FORMALITY, item.formality_max);
-  const tmin = textField('от, °C', item.temp_min, { type: 'number', inputmode: 'numeric' });
-  const tmax = textField('до, °C', item.temp_max, { type: 'number', inputmode: 'numeric' });
+  const tmin = tempField('от, °C', item.temp_min);
+  const tmax = tempField('до, °C', item.temp_max);
   const status = selectField('Статус', STATUSES, item.status);
   const water = checkField('Непромокаемая', item.water_resistant);
   const wind = checkField('Ветрозащита', item.wind_resistant);

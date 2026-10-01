@@ -229,7 +229,7 @@
 // пустым или половина кнопок не находится. Сторож сверяет версию сборки
 // (её объявляет app.js) и один раз перекачивает оболочку мимо кэша.
 // Версия пишется в двух местах: здесь и в app.js — менять их вместе.
-window.__wardrobeExpected = '2026-10-01-1';
+window.__wardrobeExpected = '2026-10-01-2';
 window.addEventListener('load', async () => {
   const want = window.__wardrobeExpected;
   if (window.__wardrobeBuild === want) return;
