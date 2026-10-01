@@ -225,13 +225,19 @@
 <script type="module" src="app.js"></script>
 <script>
 // GitHub Pages разрешает браузеру держать файлы 10 минут, поэтому сразу после
-// выкладки можно получить новую разметку со старым кодом. Если версия сборки не
-// совпала — один раз перекачиваем оболочку мимо кэша и перезагружаемся.
+// выкладки можно получить новую разметку со старым кодом — экран остаётся
+// пустым или половина кнопок не находится. Сторож сверяет версию сборки
+// (её объявляет app.js) и один раз перекачивает оболочку мимо кэша.
+// Версия пишется в двух местах: здесь и в app.js — менять их вместе.
+window.__wardrobeExpected = '2026-10-01-1';
 window.addEventListener('load', async () => {
-  if (window.__wardrobeBuild === '2026-10-01-1') return;
-  if (sessionStorage.getItem('wardrobe-refreshed')) return;
+  const want = window.__wardrobeExpected;
+  if (window.__wardrobeBuild === want) return;
+  // помним, ДЛЯ КАКОЙ версии уже лечились: одна неудачная попытка (файлы ещё
+  // не доехали до CDN) не должна блокировать лечение следующей версии
+  if (sessionStorage.getItem('wardrobe-refreshed') === want) return;
   try {
-    sessionStorage.setItem('wardrobe-refreshed', '1');
+    sessionStorage.setItem('wardrobe-refreshed', want);
     const shell = ['index.html', 'styles.css', 'app.js', 'lib.js', 'pick.js',
                    'wardrobe.js', 'item.js', 'sections.js', 'config.js'];
     await Promise.all(shell.map((f) => fetch(f, { cache: 'reload' }).catch(() => {})));
