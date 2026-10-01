@@ -43,9 +43,12 @@ INDOOR = {"gym", "home"}
 def indoor_band(season: str) -> tuple[int, int]:
     return (20, 25) if "summer" in season else (20, 22)
 REQUIRED_SLOTS = ["base", "bottom", "shoes"]
+# В зале и дома обувь в лук не идёт: зальных кроссовок в каталоге нет (пробел
+# гардероба), а дома владелец босиком или в тапках, которых мы не описываем.
+INDOOR_REQUIRED_SLOTS = ["base", "bottom"]
 SLOT_ORDER = ["base", "layer2", "outer", "bottom", "shoes", "accessory"]
 SLOT_CATEGORIES = {
-    "base": {"tshirt", "longsleeve", "polo", "shirt", "sweater", "sweatshirt", "hoodie"},
+    "base": {"tshirt", "longsleeve", "polo", "shirt", "sweater", "sweatshirt"},
     "layer2": {"shirt", "sweater", "sweatshirt", "hoodie", "vest", "blazer"},
     "outer": {"hoodie", "blazer", "jacket", "coat"},
     "bottom": {"jeans", "trousers", "shorts", "sweatpants"},
@@ -65,7 +68,8 @@ def check_look(look: dict, by_ref: dict, season: str = "") -> tuple[list[str], l
     if look["situation"] not in SITUATIONS:
         errors.append(f"ситуация {look['situation']} не из списка")
     band = (look["temp_min"], look["temp_max"])
-    if band not in BANDS:
+    # у зала и дома свой банд — он проверяется ниже, отдельным правилом
+    if band not in BANDS and look["situation"] not in INDOOR:
         warns.append(f"банд {band[0]}…{band[1]} не из трёх текущих")
     if not look.get("why", "").strip():
         errors.append("пустое «почему работает»")
@@ -89,7 +93,8 @@ def check_look(look: dict, by_ref: dict, season: str = "") -> tuple[list[str], l
             picked.append(it)
         comp[slot] = picked
 
-    for slot in REQUIRED_SLOTS:
+    required = INDOOR_REQUIRED_SLOTS if look["situation"] in INDOOR else REQUIRED_SLOTS
+    for slot in required:
         if not comp.get(slot):
             errors.append(f"не заполнен обязательный слот {slot}")
     if look["situation"] in INDOOR:

@@ -90,19 +90,38 @@ def subcategory_of(item: dict) -> tuple[str | None, bool]:
     return BY_CATEGORY.get(item.get("category")), False
 
 
+# Слои на торс и спортивный низ нужны и зимой — в зале, дома и под свитером,
+# даже если сами по себе они летние. Так владелец разметил сезоны при
+# верификации 2026-10-01: футболки и спортивные шорты зимние, лён и вязаное
+# поло — нет (DATA.md §9).
+INDOOR_LAYERS = {"tank", "tshirt", "longsleeve", "sweatshirt", "hoodie", "sweater", "shirt"}
+INDOOR_BOTTOM = {"shorts", "sweatpants"}
+# Чисто летние вещи: только они остаются без осени-весны. Ищем по названию и
+# материалу — в заметке «летние, вне сезона» стоит у половины гардероба.
+# «лён» без оглядки назад поймал бы «зелёные», поэтому слева не буква.
+RESORT = re.compile(r"(?<![а-яё])(лён|льнян|пляж|летни)|поло вязан|вязан\w* поло|коротким рукавом", re.I)
+
+
 def seasons_of(item: dict) -> list[str]:
-    """Первичная раскладка по сезонам из температурного диапазона вещи."""
+    """Первичная раскладка по сезонам. Владелец правит её при верификации.
+
+    Осень-весна — у всего, кроме курортных вещей: в +5…+20 годится и футболка
+    под джемпером. Лето — по верхней границе. Зима — не только мороз на улице,
+    но и слой на торс или спортивный низ: они нужны в зале, дома и под свитером.
+    """
     lo, hi = item.get("temp_min"), item.get("temp_max")
     if lo is None or hi is None:
         return []
-    out = []
+    resort = RESORT.search(f"{item.get('title') or ''} {item.get('material') or ''}")
+    if resort and hi >= 20:
+        return ["summer"]
+    out = ["demi"]
     if hi >= 20:
         out.append("summer")
-    if lo <= 18 and hi >= 3:
-        out.append("demi")
-    if lo <= 2:
+    sub = item.get("subcategory")
+    if lo <= 2 or sub in INDOOR_LAYERS or (sub in INDOOR_BOTTOM and "gym" in (item.get("situations") or [])):
         out.append("winter")
-    return out or ["demi"]
+    return out
 
 
 def main() -> None:
@@ -117,7 +136,7 @@ def main() -> None:
         raise SystemExit(f"В правилах есть подразделы, которых нет в sections.js: {sorted(bad)}")
 
     c = S.Client()
-    items = c.select("items", select="id,title,category,temp_min,temp_max,subcategory,seasons,verified",
+    items = c.select("items", select="id,title,category,material,situations,temp_min,temp_max,subcategory,seasons,verified",
                      order="title.asc")
     print(f"В базе {len(items)} вещей, проверенных: {sum(1 for i in items if i.get('verified'))}\n")
 
