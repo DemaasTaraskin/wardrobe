@@ -17,6 +17,7 @@ export const state = {
   user: null,
   season: '2026-autumn',
   items: null,        // кэш карточек (гардероб и составы луков)
+  lastError: null,    // последняя ошибка — показывается в «Диагностике»
   ratings: new Map(), // look_id → оценка
 };
 
@@ -241,6 +242,7 @@ export function todayISO() {
 }
 
 export function errText(error) {
+  try { state.lastError = { when: new Date().toLocaleTimeString('ru-RU'), raw: String(error && (error.message || error)) }; } catch { /* ok */ }
   const m = (error && (error.message || error.error_description)) || String(error || '');
   if (/rate limit|over_email_send/i.test(m)) return 'Письма кончились: встроенная почта Supabase шлёт 2 письма в час. Подожди начала следующего часа.';
   if (/Signups not allowed|otp_disabled/i.test(m)) return 'Этот адрес не приглашён в проект. Заведи его в панели Supabase (Authentication → Users → Add user).';

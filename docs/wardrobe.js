@@ -69,9 +69,18 @@ export async function showWardrobe() {
   box.append(el('div', { class: 'skeleton' }));
   try {
     await loadItems();
+  } catch (e) {
+    // не грузятся данные — показываем причину и даём повторить, а не пустой экран
+    clear(box).append(
+      el('p', { class: 'msg err', text: errText(e) }),
+      el('button', { class: 'btn btn-wide', type: 'button', onclick: () => showWardrobe() }, ['Повторить']),
+    );
+    return;
+  }
+  try {
     render();
   } catch (e) {
-    clear(box).append(el('p', { class: 'msg err', text: errText(e) }));
+    clear(box).append(el('p', { class: 'msg err', text: 'Сетка не нарисовалась: ' + errText(e) }));
   }
 }
 

@@ -1,7 +1,7 @@
 // Точка входа: вход по паролю, вкладки, запуск экранов.
 // Версия сборки: её же ждёт index.html. Меняются оба места вместе —
 // по несовпадению приложение понимает, что браузер подсунул старый файл.
-window.__wardrobeBuild = '2026-09-30-6';
+window.__wardrobeBuild = '2026-10-01-1';
 import { sb, state, $, toast, showScreen, errText, prefs } from './lib.js';
 import { initPick, runPick } from './pick.js';
 import { initWardrobe, showWardrobe, loadItems } from './wardrobe.js';
@@ -157,6 +157,24 @@ function initChrome() {
     }
   });
 
+  $('#btn-diagnostics').addEventListener('click', showDiagnostics);
+  $('#diag-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#diag-text').textContent);
+      toast('Скопировано — пришли это в чат');
+    } catch {
+      toast('Скопировать не вышло, сделай скриншот');
+    }
+  });
+  $('#diag-reset').addEventListener('click', async () => {
+    try {
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      sessionStorage.removeItem('wardrobe-refreshed');
+    } catch { /* приватный режим */ }
+    location.reload();
+  });
+
   $('#btn-logout').addEventListener('click', async () => {
     $('#menu').hidden = true;
     // scope: 'local' — гасим только этот браузер. По умолчанию Supabase
@@ -166,9 +184,56 @@ function initChrome() {
   });
 }
 
+/** Что показать в чат, когда на телефоне что-то не грузится. */
+async function showDiagnostics() {
+  $('#menu').hidden = true;
+  // шторку открываем сразу и дописываем строки по мере готовности: если один
+  // из запросов повиснет, уже собранное всё равно будет видно
+  $('#diag-text').textContent = 'Собираю…';
+  $('#diag-sheet').hidden = false;
+  const lines = [];
+  const say = (k, v) => {
+    lines.push(`${k}: ${v}`);
+    $('#diag-text').textContent = lines.join('\n');
+  };
+  say('версия сборки', window.__wardrobeBuild || 'неизвестна');
+  say('адрес', location.href);
+  say('браузер', navigator.userAgent);
+  say('сеть', navigator.onLine ? 'есть' : 'нет');
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    say('сессия', session ? `есть, истекает ${new Date(session.expires_at * 1000).toLocaleString('ru-RU')}` : 'нет');
+    say('почта', session?.user?.email || '—');
+  } catch (e) {
+    say('сессия', 'ошибка: ' + (e.message || e));
+  }
+  say('вещей загружено', state.items ? state.items.length : 'не загружались');
+  try {
+    const t0 = Date.now();
+    const { data, error, status } = await sb.from('items').select('id').limit(1);
+    say('запрос к базе', error ? `ошибка ${status}: ${error.message}` : `ответ за ${Date.now() - t0} мс, строк ${data.length}`);
+  } catch (e) {
+    say('запрос к базе', 'упал: ' + (e.message || e));
+  }
+  if (state.items?.length) {
+    try {
+      const { data, error } = await sb.storage.from('wardrobe')
+        .createSignedUrls([state.items[0].photo_path], 60);
+      say('ссылки на фото', error ? `ошибка: ${error.message}` : `получено ${data?.length ?? 0}`);
+    } catch (e) {
+      say('ссылки на фото', 'упали: ' + (e.message || e));
+    }
+  }
+  try {
+    say('service worker', (await navigator.serviceWorker.getRegistrations()).length ? 'установлен' : 'нет');
+    say('кэши', (await caches.keys()).join(', ') || 'пусто');
+  } catch { say('service worker', 'недоступен'); }
+  if (state.lastError) say('последняя ошибка', `${state.lastError.when} — ${state.lastError.raw}`);
+}
+
 function closeTop() {
   if (!$('#zoom').hidden) { closeZoom(); return; }
-  for (const id of ['#analogs', '#filters-sheet', '#password-sheet', '#menu', '#sheet']) {
+  for (const id of ['#analogs', '#filters-sheet', '#password-sheet', '#diag-sheet', '#menu', '#sheet']) {
     if (!$(id).hidden) { $(id).hidden = true; return; }
   }
 }
@@ -188,8 +253,14 @@ async function start(user) {
   const { data } = await sb.from('profiles').select('current_season').eq('id', user.id).maybeSingle();
   if (data?.current_season) state.season = data.current_season;
 
-  initPick();
-  initWardrobe();
+  // Экран показываем в любом случае: если что-то из инициализации упадёт,
+  // пустого белого листа быть не должно — будет видно ошибку.
+  try {
+    initPick();
+    initWardrobe();
+  } catch (e) {
+    toast(errText(e));
+  }
   showScreen('pick');
   runPick();
   loadItems().catch(() => { /* сетка подгрузится при открытии вкладки */ });

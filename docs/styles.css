@@ -232,6 +232,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .toast[hidden] { display: none; }
 
+.diag { white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.5;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 0; }
 .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
 .gap-card { background: var(--card); border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; }
 .skeleton { background: var(--tile); border-radius: var(--radius); height: 120px; animation: pulse 1.2s ease-in-out infinite; }
