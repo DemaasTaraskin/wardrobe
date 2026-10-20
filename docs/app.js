@@ -1,7 +1,7 @@
 // Точка входа: вход по паролю, вкладки, запуск экранов.
 // Версия сборки: её же ждёт index.html. Меняются оба места вместе —
 // по несовпадению приложение понимает, что браузер подсунул старый файл.
-window.__wardrobeBuild = '2026-10-01-2';
+window.__wardrobeBuild = '2026-10-20-1';
 import { sb, state, $, toast, showScreen, errText, prefs } from './lib.js';
 import { initPick, runPick } from './pick.js';
 import { initWardrobe, showWardrobe, loadItems } from './wardrobe.js';
@@ -305,6 +305,13 @@ async function boot() {
 
 function cleanUrl() {
   if (location.hash || location.search) history.replaceState(null, '', location.pathname);
+}
+
+// Safari на айфоне умеет не послушаться user-scalable=no, поэтому щипок гасим
+// ещё и здесь. Фото вещи это не задевает: там свой пинч на touch-событиях,
+// а gesture-события — отдельная, сафарная история.
+for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
 }
 
 boot();

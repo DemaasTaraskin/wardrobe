@@ -39,11 +39,19 @@
 /* без этого display:flex у .stack и .chips перебивает атрибут hidden */
 [hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; overflow-x: hidden; }
+/* Масштаб зафиксирован: случайный щипок или двойной тап больше не увеличивают
+   экран, а список не отскакивает резиной на краях — от этого и дёргалось.
+   Фото вещи по-прежнему приближается двумя пальцами: у .zoom-stage свои
+   обработчики и touch-action: none. */
+html { overscroll-behavior-y: none; }
 body {
   background: var(--bg);
   color: var(--text);
   font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: none;
   padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 h1 { font-size: 20px; margin: 0; }
