@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Гардероб">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon-2.png">
+<link rel="icon" href="icons/icon-192-2.png">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -229,7 +229,7 @@
 // пустым или половина кнопок не находится. Сторож сверяет версию сборки
 // (её объявляет app.js) и один раз перекачивает оболочку мимо кэша.
 // Версия пишется в двух местах: здесь и в app.js — менять их вместе.
-window.__wardrobeExpected = '2026-10-20-1';
+window.__wardrobeExpected = '2026-10-20-2';
 window.addEventListener('load', async () => {
   const want = window.__wardrobeExpected;
   if (window.__wardrobeBuild === want) return;

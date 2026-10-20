@@ -4,12 +4,17 @@
 крюк со стойкой и плечики. Поэтому стыки получаются скруглёнными, а не
 ступенькой: прошлые иконки были собраны из отдельных кусков и разъезжались.
 
-Что на выходе (docs/icons/):
-  icon-192.png, icon-512.png   — скруглённый квадрат, углы прозрачные
-  icon-maskable-512.png        — во весь квадрат: Android режет иконку сам
-  apple-touch-icon.png         — во весь квадрат: iOS тоже режет сам
+Что на выходе (docs/icons/, к имени добавляется V):
+  icon-192-N.png, icon-512-N.png   — скруглённый квадрат, углы прозрачные
+  icon-maskable-512-N.png          — во весь квадрат: Android режет иконку сам
+  apple-touch-icon-N.png           — во весь квадрат: iOS тоже режет сам
 
 Нужен только Pillow.
+
+Меняешь рисунок — поднимай V и правь ссылки в index.html, manifest.webmanifest
+и sw.js. iOS кэширует иконку по адресу и отдаёт старую картинку даже после
+удаления ярлыка с домашнего экрана; новое имя файла — единственный способ,
+который работает наверняка.
 """
 
 from __future__ import annotations
@@ -27,6 +32,7 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 OUT = pathlib.Path(__file__).resolve().parents[1] / "docs" / "icons"
+V = "2"                         # версия рисунка, она же хвост в имени файла
 GREEN = (47, 93, 80, 255)      # --accent
 CREAM = (250, 249, 247, 255)   # --bg
 SS = 4                          # сглаживание: рисуем вчетверо крупнее и ужимаем
@@ -100,12 +106,12 @@ def icon(size: int, *, rounded: bool, glyph: float) -> Image.Image:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     made = [
-        ("icon-192.png", icon(192, rounded=True, glyph=1.0), "RGBA"),
-        ("icon-512.png", icon(512, rounded=True, glyph=1.0), "RGBA"),
+        (f"icon-192-{V}.png", icon(192, rounded=True, glyph=1.0), "RGBA"),
+        (f"icon-512-{V}.png", icon(512, rounded=True, glyph=1.0), "RGBA"),
         # Android вписывает иконку в свою форму и срезает до 10% с каждой
         # стороны, поэтому вешалка здесь мельче и фон во весь квадрат.
-        ("icon-maskable-512.png", icon(512, rounded=False, glyph=0.84), "RGB"),
-        ("apple-touch-icon.png", icon(180, rounded=False, glyph=1.0), "RGB"),
+        (f"icon-maskable-512-{V}.png", icon(512, rounded=False, glyph=0.84), "RGB"),
+        (f"apple-touch-icon-{V}.png", icon(180, rounded=False, glyph=1.0), "RGB"),
     ]
     for name, im, mode in made:
         if mode == "RGB":
