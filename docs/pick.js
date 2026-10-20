@@ -312,7 +312,20 @@ async function applySwap(row, li, picked) {
   li.items = { ...li.items, ...picked.item };
   li.original_item_id = patch.original_item_id;
   toast(patch.original_item_id ? `В луке теперь: ${picked.title}` : 'Вернул мой вариант');
+  refreshCard(row, picked);
   await openLook(row);
+}
+
+/** Карточка в списке подбора остаётся на экране за спиной: без этого,
+ *  вернувшись назад, владелец увидел бы в мини-коллаже прежнюю вещь. */
+function refreshCard(row, picked) {
+  refreshBadges(row);
+  const n = sortedLookItems(row.look).findIndex((x) => x.items.id === picked.itemId);
+  for (const card of $('#pick-results').children) {
+    if (card.__lookId !== row.look.id) continue;
+    const img = card.querySelectorAll('.collage.mini img')[n];
+    if (img && picked.url) { img.src = picked.url; img.alt = picked.title; }
+  }
 }
 
 function wearButton(look) {
