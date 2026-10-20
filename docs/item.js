@@ -278,10 +278,22 @@ function openAnalogs(item) {
 
 let zoomState = { scale: 1, x: 0, y: 0, startDist: 0, startScale: 1 };
 
+// Режим замены: открыт с экрана лука, под фото стрелки, тап по фото — сохранить.
+// null — обычный просмотр фото из гардероба, поведение прежнее.
+let swap = null;
+
+let zoomReady = false;
+
+/** Оверлей нужен и гардеробу, и экрану лука, а вызывают его оба независимо —
+ *  поэтому вторая попытка молча выходит, иначе стрелки листали бы по два раза. */
 export function initZoom() {
+  if (zoomReady) return;
+  zoomReady = true;
   const stage = $('#zoom-stage');
   const img = $('#zoom-img');
   $('#zoom-close').addEventListener('click', closeZoom);
+  $('#zoom-prev').addEventListener('click', () => step(-1));
+  $('#zoom-next').addEventListener('click', () => step(1));
 
   const apply = () => { img.style.transform = `translate(${zoomState.x}px, ${zoomState.y}px) scale(${zoomState.scale})`; };
   const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
@@ -315,9 +327,11 @@ export function initZoom() {
     if (e.touches.length === 0) { zoomState.startDist = 0; zoomState.panFrom = null; }
   });
 
-  // двойной тап приближает, второй двойной — возвращает как было
+  // В режиме замены тап по фото закрывает и сохраняет выбранный вариант.
+  // В обычном просмотре работает двойной тап: приблизить / вернуть как было.
   let lastTap = 0;
   stage.addEventListener('click', () => {
+    if (swap) { confirmSwap(); return; }
     const now = Date.now();
     if (now - lastTap < 320) {
       zoomState.scale = zoomState.scale > 1 ? 1 : 2.5;
@@ -340,6 +354,24 @@ export function initZoom() {
 
 export function openZoom(url, alt) {
   if (!url) { toast('Фото ещё не загрузилось'); return; }
+  swap = null;
+  $('#zoom-swap').hidden = true;
+  $('#zoom-hint').textContent = 'Двумя пальцами — приблизить, двойной тап — сброс';
+  showZoom(url, alt);
+}
+
+/** Фото вещи из лука с вариантами замены.
+ *  options — [{ url, title, itemId }], первый элемент — то, что предложил я.
+ *  onPick(option) вызывается при тапе по фото, если выбор изменился. */
+export function openSwap({ options, index = 0, onPick }) {
+  const start = options[index] || options[0];
+  if (!start || !start.url) { toast('Фото ещё не загрузилось'); return; }
+  swap = { options, index: options.indexOf(start), from: options.indexOf(start), onPick };
+  showZoom(start.url, start.title);
+  paintSwap();
+}
+
+function showZoom(url, alt) {
   zoomState = { scale: 1, x: 0, y: 0, startDist: 0, startScale: 1 };
   const img = $('#zoom-img');
   img.style.transform = '';
@@ -348,4 +380,40 @@ export function openZoom(url, alt) {
   $('#zoom').hidden = false;
 }
 
-export function closeZoom() { $('#zoom').hidden = true; }
+function paintSwap() {
+  const many = swap.options.length > 1;
+  $('#zoom-swap').hidden = !many;
+  $('#zoom-hint').textContent = many
+    ? 'Стрелками — другой вариант, тап по фото — оставить выбранный'
+    : 'Тап по фото — закрыть';
+  if (!many) return;
+  const cur = swap.options[swap.index];
+  $('#zoom-swap-title').textContent = cur.title;
+  $('#zoom-swap-count').textContent =
+    `${swap.index + 1} из ${swap.options.length}` + (swap.index === 0 ? ' · мой вариант' : '');
+}
+
+function step(delta) {
+  if (!swap) return;
+  const n = swap.options.length;
+  swap.index = (swap.index + delta + n) % n;
+  const cur = swap.options[swap.index];
+  zoomState = { scale: 1, x: 0, y: 0, startDist: 0, startScale: 1 };
+  const img = $('#zoom-img');
+  img.style.transform = '';
+  img.src = cur.url;
+  img.alt = cur.title;
+  paintSwap();
+}
+
+function confirmSwap() {
+  const s = swap;
+  closeZoom();
+  if (s.index !== s.from) s.onPick(s.options[s.index]);
+}
+
+export function closeZoom() {
+  swap = null;
+  $('#zoom-swap').hidden = true;
+  $('#zoom').hidden = true;
+}

@@ -157,7 +157,17 @@
 <div id="zoom" class="zoom" hidden>
   <button class="zoom-close" id="zoom-close" aria-label="Закрыть">✕</button>
   <div class="zoom-stage" id="zoom-stage"><img id="zoom-img" alt=""></div>
-  <p class="zoom-hint">Двумя пальцами — приблизить, двойной тап — сброс</p>
+  <div class="zoom-swap" id="zoom-swap" hidden>
+    <div class="zoom-swap-row">
+      <button class="zoom-arrow" id="zoom-prev" type="button" aria-label="Предыдущий вариант">‹</button>
+      <div class="zoom-swap-mid">
+        <strong id="zoom-swap-title"></strong>
+        <span class="muted small" id="zoom-swap-count"></span>
+      </div>
+      <button class="zoom-arrow" id="zoom-next" type="button" aria-label="Следующий вариант">›</button>
+    </div>
+  </div>
+  <p class="zoom-hint" id="zoom-hint">Двумя пальцами — приблизить, двойной тап — сброс</p>
 </div>
 
 <!-- Задать пароль -->
@@ -229,7 +239,7 @@
 // пустым или половина кнопок не находится. Сторож сверяет версию сборки
 // (её объявляет app.js) и один раз перекачивает оболочку мимо кэша.
 // Версия пишется в двух местах: здесь и в app.js — менять их вместе.
-window.__wardrobeExpected = '2026-10-20-3';
+window.__wardrobeExpected = '2026-10-20-4';
 window.addEventListener('load', async () => {
   const want = window.__wardrobeExpected;
   if (window.__wardrobeBuild === want) return;

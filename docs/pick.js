@@ -4,10 +4,12 @@ import {
   el, $, clear, toast, showScreen, photoUrls, photoImg,
   labelOf, tempLabel, todayISO, errText, prefs,
 } from './lib.js';
+import { openSwap, openZoom, initZoom } from './item.js';
 
 const LOOK_SELECT =
   'id, season, situation, temp_min, temp_max, rain_ok, why, batch, ' +
-  'look_items ( slot, position, items ( id, title, brand, category, photo_path ) )';
+  'look_items ( slot, position, original_item_id, items ( id, title, brand, category, photo_path ) ), ' +
+  'look_alts ( slot, position, rank, items ( id, title, photo_path ) )';
 
 const ctx = {
   temp: prefs.get('temp', 12),
@@ -18,6 +20,7 @@ const ctx = {
 let lastResults = [];
 
 export function initPick() {
+  initZoom();
   $('#temp').value = ctx.temp;
   $('#rain').checked = ctx.rain;
 
@@ -186,7 +189,14 @@ function badgesFor(row) {
   if (row.border) out.push(el('span', { class: 'badge', text: 'на границе диапазона' }));
   if (row.look.rain_ok) out.push(el('span', { class: 'badge', text: 'годится в дождь' }));
   const rated = state.ratings.get(row.look.id);
-  if (rated) out.push(el('span', { class: 'badge badge-rated', text: rated.verdict === 'love' ? '❤️ понравился' : '👎 отклонён' }));
+  if (rated?.verdict) {
+    out.push(el('span', { class: 'badge badge-rated', text: rated.verdict === 'love' ? '❤️ понравился' : '👎 отклонён' }));
+  } else if (rated?.comment) {
+    out.push(el('span', { class: 'badge badge-rated', text: '✍️ с комментарием' }));
+  }
+  if ((row.look.look_items || []).some((li) => li.original_item_id)) {
+    out.push(el('span', { class: 'badge', text: 'с твоей заменой' }));
+  }
   return out;
 }
 
@@ -206,6 +216,37 @@ function lookCard(row, urls) {
 
 // ------------------------------------------------------------------ экран лука
 
+/** Карточки вещей, которых нет в составе лука: варианты замены и та вещь,
+ *  что я предлагал изначально, если владелец её уже заменил. */
+async function loadSideItems(look) {
+  const known = new Set();
+  for (const li of look.look_items || []) if (li.items) known.add(li.items.id);
+  for (const a of look.look_alts || []) if (a.items) known.add(a.items.id);
+  const want = (look.look_items || [])
+    .map((li) => li.original_item_id)
+    .filter((id) => id && !known.has(id));
+  if (!want.length) return new Map();
+  const { data, error } = await sb.from('items').select('id, title, photo_path').in('id', [...new Set(want)]);
+  if (error) { console.warn('original items', error); return new Map(); }
+  return new Map((data || []).map((it) => [it.id, it]));
+}
+
+/** Варианты для слота: первым — то, что предложил я, дальше мои замены по порядку.
+ *  Текущая вещь всегда где-то в этом списке, её номер и есть начальный. */
+function optionsFor(look, li, side) {
+  const byId = new Map();
+  const add = (it) => { if (it && !byId.has(it.id)) byId.set(it.id, it); };
+
+  const originalId = li.original_item_id || li.items.id;
+  add(side.get(originalId) || (li.items.id === originalId ? li.items : null));
+  for (const a of (look.look_alts || []).filter((x) => x.slot === li.slot && x.position === li.position)
+    .sort((x, y) => x.rank - y.rank)) add(a.items);
+  add(li.items); // на случай, если состав правили не из приложения
+
+  const list = [...byId.values()];
+  return { list, index: Math.max(0, list.findIndex((it) => it.id === li.items.id)) };
+}
+
 export async function openLook(row) {
   const look = row.look;
   showScreen('look');
@@ -214,20 +255,64 @@ export async function openLook(row) {
   body.append(el('div', { class: 'skeleton' }));
 
   const items = sortedLookItems(look);
-  const urls = await photoUrls(items.map((li) => li.items.photo_path));
+  const side = await loadSideItems(look);
+  const opts = new Map(items.map((li) => [li, optionsFor(look, li, side)]));
+  const urls = await photoUrls([...opts.values()].flatMap((o) => o.list.map((it) => it.photo_path)));
   clear(body);
 
+  const cell = (li) => {
+    const { list, index } = opts.get(li);
+    const node = el('button', {
+      class: 'cell', type: 'button',
+      onclick: () => {
+        const options = list.map((it) => ({ itemId: it.id, title: it.title, item: it, url: urls.get(it.photo_path) }));
+        if (options.length < 2) { openZoom(options[index].url, options[index].title); return; }
+        openSwap({ options, index, onPick: (picked) => applySwap(row, li, picked) });
+      },
+    }, [photoImg(urls.get(li.items.photo_path), li.items.title)]);
+    if (list.length > 1) node.append(el('span', { class: 'swap-mark', text: '⇄' }));
+    return node;
+  };
+
   body.append(el('div', { class: 'badges', style: 'padding-left:0' }, badgesFor(row)));
-  body.append(el('div', { class: 'collage' },
-    items.map((li) => el('figure', {}, [photoImg(urls.get(li.items.photo_path), li.items.title)]))));
+  body.append(el('div', { class: 'collage' }, items.map(cell)));
   body.append(el('p', { class: 'why-big', text: look.why }));
-  body.append(el('ul', { class: 'look-items' }, items.map((li) => el('li', {}, [
-    el('span', { class: 'slot', text: labelOf(SLOTS, li.slot) }),
-    el('span', { text: li.items.title }),
-  ]))));
+  body.append(el('ul', { class: 'look-items' }, items.map((li) => {
+    const was = li.original_item_id ? side.get(li.original_item_id) : null;
+    return el('li', {}, [
+      el('span', { class: 'slot', text: labelOf(SLOTS, li.slot) }),
+      el('span', {}, [
+        li.items.title,
+        was ? el('span', { class: 'swapped', text: ` · вместо: ${was.title}` }) : null,
+      ]),
+    ]);
+  })));
+  if (items.some((li) => opts.get(li).list.length > 1)) {
+    body.append(el('p', { class: 'muted small', style: 'margin:10px 0 0',
+      text: 'Вещь со значком ⇄ можно заменить: тапни по фото, пролистай стрелками и тапни по снимку — выбор сохранится.' }));
+  }
 
   body.append(wearButton(look));
   body.append(ratingBlock(look));
+}
+
+/** Сохраняем замену: в слот встаёт выбранная вещь, а рядом остаётся то,
+ *  что предлагал я, — на этапе 6 это главный сигнал. */
+async function applySwap(row, li, picked) {
+  const look = row.look;
+  const original = li.original_item_id || li.items.id;
+  const patch = {
+    item_id: picked.itemId,
+    original_item_id: picked.itemId === original ? null : original,
+  };
+  const { error } = await sb.from('look_items').update(patch)
+    .eq('look_id', look.id).eq('slot', li.slot).eq('position', li.position);
+  if (error) { toast(errText(error)); return; }
+
+  li.items = { ...li.items, ...picked.item };
+  li.original_item_id = patch.original_item_id;
+  toast(patch.original_item_id ? `В луке теперь: ${picked.title}` : 'Вернул мой вариант');
+  await openLook(row);
 }
 
 function wearButton(look) {
@@ -275,26 +360,29 @@ function ratingBlock(look) {
     },
   }, [r.label])));
 
-  const comment = el('textarea', { placeholder: 'Комментарий (по желанию)', rows: 3 });
+  // Комментарий живёт сам по себе: его можно оставить и без ❤️/👎 — например,
+  // «надел, но в этом свитере жарко». Повторный тап по ❤️ или 👎 снимает оценку.
+  const comment = el('textarea', { placeholder: 'Что понравилось, что нет, что заменил', rows: 3 });
   comment.value = draft.comment;
   const commentField = el('label', { class: 'field' }, [el('span', { text: 'Комментарий' }), comment]);
 
-  const save = el('button', { class: 'btn btn-primary btn-wide' }, ['Сохранить оценку']);
+  const save = el('button', { class: 'btn btn-primary btn-wide' }, ['Сохранить']);
   save.addEventListener('click', async () => {
-    if (!draft.verdict) { toast('Сначала ❤️ или 👎'); return; }
+    const text = comment.value.trim();
+    if (!draft.verdict && !text) { toast('Поставь ❤️ или 👎 либо напиши комментарий'); return; }
     save.disabled = true;
     const payload = {
       user_id: state.user.id,
       look_id: look.id,
       verdict: draft.verdict,
       reasons: draft.verdict === 'dislike' ? [...draft.reasons] : [],
-      comment: comment.value.trim() || null,
+      comment: text || null,
     };
     const { error } = await sb.from('ratings').upsert(payload, { onConflict: 'user_id,look_id' });
     save.disabled = false;
     if (error) { toast(errText(error)); return; }
     state.ratings.set(look.id, payload);
-    toast('Оценка сохранена');
+    toast(draft.verdict ? 'Оценка сохранена' : 'Комментарий сохранён');
     showScreen('pick');
     const card = lastResults.find((r) => r.look.id === look.id);
     if (card) refreshBadges(card);
@@ -304,15 +392,19 @@ function ratingBlock(look) {
     love.classList.toggle('is-on', draft.verdict === 'love');
     nope.classList.toggle('is-on', draft.verdict === 'dislike');
     clear(extra);
-    if (!draft.verdict) return;
     if (draft.verdict === 'dislike') {
       extra.append(el('p', { class: 'muted small', style: 'margin:0', text: 'Что не так?' }), reasonsBox);
     }
     extra.append(commentField, save);
   }
 
-  love.addEventListener('click', () => { draft.verdict = 'love'; draft.reasons.clear(); paint(); });
-  nope.addEventListener('click', () => { draft.verdict = 'dislike'; paint(); });
+  const toggle = (verdict) => {
+    draft.verdict = draft.verdict === verdict ? null : verdict;
+    if (draft.verdict !== 'dislike') draft.reasons.clear();
+    paint();
+  };
+  love.addEventListener('click', () => toggle('love'));
+  nope.addEventListener('click', () => toggle('dislike'));
   paint();
   return box;
 }

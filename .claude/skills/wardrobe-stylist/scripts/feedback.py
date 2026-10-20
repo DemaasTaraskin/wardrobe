@@ -22,7 +22,7 @@ REASON_RU = {
 SELECT = ("id,situation,temp_min,temp_max,rain_ok,why,batch,status,created_at,"
           "ratings(verdict,reasons,comment,updated_at),"
           "wear_log(worn_on,temp_c,situation,rain),"
-          "look_items(slot,position,items(id,title,category))")
+          "look_items(slot,position,original_item_id,items(id,title,category))")
 
 
 def name(look: dict) -> str:
@@ -42,8 +42,10 @@ def main() -> int:
                      order="situation,temp_min", limit="1000")
     items = c.select("items", select="id,title,category,status", status="eq.active", limit="2000")
 
-    rated = [l for l in looks if l["ratings"]]
+    rated = [l for l in looks if l["ratings"] and l["ratings"][0]["verdict"]]
     loved = [l for l in rated if l["ratings"][0]["verdict"] == "love"]
+    # замена вещи — самый сильный сигнал: лук владельцу почти подошёл, но не весь
+    swaps = [(l, li) for l in looks for li in l["look_items"] if li.get("original_item_id")]
     worn = [(w, l) for l in looks for w in l["wear_log"]]
     reasons = Counter(r for l in rated for r in (l["ratings"][0]["reasons"] or []))
 
@@ -67,17 +69,30 @@ def main() -> int:
            f"- дней с записью «надел»: {len(days)}{span}",
            f"- всего надеваний: {len(worn)}",
            f"- активных вещей, не попавших ни в один лук: {len(never_in_look)}",
-           f"- вещей в луках, которые ни разу не надеты: {len(never_worn)}", ""]
+           f"- вещей в луках, которые ни разу не надеты: {len(never_worn)}",
+           f"- вещей, которые владелец заменил сам: {len(swaps)}", ""]
+
+    if swaps:
+        by_id = {i["id"]: i["title"] for i in items}
+        out += ["## Заменил сам", "",
+                "Самый сильный сигнал: лук почти подошёл, но одну вещь владелец поменял.", "",
+                "| ситуация | банд | слот | было (мой вариант) | стало |", "|---|---|---|---|---|"]
+        for l, li in swaps:
+            was = by_id.get(li["original_item_id"], li["original_item_id"])
+            out.append(f"| {l['situation']} | {l['temp_min']}…{l['temp_max']} | {li['slot']} | "
+                       f"{was} | {li['items']['title']} |")
+        out.append("")
 
     if reasons:
         out += ["## Почему 👎", ""]
         out += [f"- {REASON_RU.get(r, r)}: {n}" for r, n in reasons.most_common()] + [""]
 
-    comments = [(l, l["ratings"][0]) for l in rated if (l["ratings"][0]["comment"] or "").strip()]
+    comments = [(l, l["ratings"][0]) for l in looks
+                if l["ratings"] and (l["ratings"][0]["comment"] or "").strip()]
     if comments:
         out += ["## Комментарии", ""]
         for l, r in comments:
-            mark = "❤️" if r["verdict"] == "love" else "👎"
+            mark = {"love": "❤️", "dislike": "👎"}.get(r["verdict"], "✍️")
             out.append(f"- {mark} **{l['situation']} {l['temp_min']}…{l['temp_max']}** — "
                        f"{r['comment'].strip()}  \n  <sub>{name(l)}</sub>")
         out.append("")
@@ -104,7 +119,7 @@ def main() -> int:
         out += ["## Есть в луках, но не надето", ""]
         out += [f"- {i['title']}" for i in never_worn] + [""]
 
-    unrated = [l for l in looks if not l["ratings"]]
+    unrated = [l for l in looks if not (l["ratings"] and l["ratings"][0]["verdict"])]
     if unrated:
         out += ["## Без оценки", ""]
         out += [f"- {l['situation']} {l['temp_min']}…{l['temp_max']}: {name(l)}" for l in unrated] + [""]
@@ -116,6 +131,8 @@ def main() -> int:
            + (f" ({len(loved) * 100 // len(rated)}%)" if rated else ""))
     sb.say(f"Надеваний {len(worn)} за {len(days)} дн.; "
            f"вещей без единого лука {len(never_in_look)}, без единого выхода {len(never_worn)}")
+    if swaps:
+        sb.say(f"Владелец сам заменил вещей: {len(swaps)} — смотреть раздел «Заменил сам»")
     if reasons:
         sb.say("Причины 👎: " + ", ".join(f"{REASON_RU.get(r, r)}×{n}" for r, n in reasons.most_common()))
     sb.say(f"Подробности → {path.name}")

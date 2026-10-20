@@ -4,6 +4,7 @@
   python looks_push.py looks_batch1.json             — проверка и запись
   python looks_push.py --coverage                    — таблица покрытия 5 ситуаций × 3 банда
   python looks_push.py looks_batch2.json --retire-existing   — вторая партия вместо первой
+  python looks_push.py looks_batch1.json --replace-batch     — переписать свою же партию
 
 Формат файла с луками:
 {
@@ -14,13 +15,19 @@
      "why": "Почему работает, 1–3 предложения.",
      "items": {"base": "IMG_1.png", "layer2": "IMG_2.png", "outer": "IMG_3.png",
                "bottom": "IMG_4.png", "shoes": "IMG_5.png",
-               "accessory": ["IMG_6.png"]}}
+               "accessory": ["IMG_6.png"]},
+     "alts": {"base": ["IMG_7.png"], "bottom": ["IMG_8.png"]}}
   ],
   "gaps": [{"situation": "gym", "temp_min": 5, "temp_max": 10, "rain_ok": true,
             "missing": "чего не хватило"}]
 }
 Вещи указываются по source_file (имя файла фото) или по id. rain_ok у лука не пишется
 руками — считается сам: лук годится в дождь, если в нём есть рукава.
+
+`alts` — необязательные варианты замены: до двух на слот, в приложении они листаются
+стрелками под увеличенным фото. Это не автоподбор по гардеробу, а выбранные руками вещи.
+Каждый вариант подставляется в лук и проверяется теми же правилами, что и сам лук, —
+негодный вариант не запишется. Аксессуарам замены не делаем.
 """
 
 from __future__ import annotations
@@ -145,9 +152,12 @@ def check_look(look: dict, by_ref: dict, season: str = "") -> tuple[list[str], l
                           + ", ".join(f"{it['title']} {it['formality_min']}-{it['formality_max']}"
                                       for _, it in flat))
         elif f_lo >= 3:
-            loud = [it["title"] for _, it in flat if it["logo"] != "none"]
+            # Крупный принт или надпись при формальности 3 — ошибка. Мелкий тональный
+            # логотип (нашивка на рукаве, дерево на ботинке) допустим: иначе вечер и
+            # офис на холоде не собираются вообще — решение владельца 2026-10-20.
+            loud = [it["title"] for _, it in flat if it["logo"] == "large"]
             if loud:
-                errors.append(f"с формальности {f_lo} логотипов быть не должно: {', '.join(loud)}")
+                errors.append(f"с формальности {f_lo} крупных логотипов быть не должно: {', '.join(loud)}")
 
         figured = [it["title"] for _, it in flat if it["pattern"] in FIGURED]
         if len(figured) > 1:
@@ -162,6 +172,56 @@ def check_look(look: dict, by_ref: dict, season: str = "") -> tuple[list[str], l
     look["_rain_ok"] = rain_ok
     look["_comp"] = comp
     return errors, warns, comp
+
+
+def check_alts(look: dict, by_ref: dict, season: str) -> list[str]:
+    """Каждый вариант замены подставляется в лук и проверяется теми же правилами.
+
+    Негодный вариант — ошибка, а не заметка: в приложении он листается наравне
+    с исходной вещью, и собрать им неносибельный лук владелец не должен."""
+    errors: list[str] = []
+    resolved: dict[str, list[dict]] = {}
+    raw = look.get("alts") or {}
+
+    for slot, refs in raw.items():
+        if slot not in SLOT_ORDER:
+            errors.append(f"вариант: неизвестный слот {slot}")
+            continue
+        if slot == "accessory":
+            errors.append("вариант: аксессуарам замены не делаем")
+            continue
+        here = (look.get("items") or {}).get(slot)
+        if not here:
+            errors.append(f"вариант: в слоте {slot} нечего заменять")
+            continue
+        refs = refs if isinstance(refs, list) else [refs]
+        if len(refs) > 2:
+            errors.append(f"вариант: в слоте {slot} больше двух замен")
+            continue
+
+        picked: list[dict] = []
+        for r in refs:
+            it = by_ref.get(r)
+            if not it:
+                errors.append(f"вариант не найден: {r}")
+                continue
+            if by_ref.get(here, {}).get("id") == it["id"]:
+                errors.append(f"вариант {it['title']} совпадает с вещью в слоте {slot}")
+                continue
+            if any(p["id"] == it["id"] for p in picked):
+                errors.append(f"вариант {it['title']} в слоте {slot} указан дважды")
+                continue
+            probe = dict(look, items=dict(look["items"], **{slot: r}))
+            errs, _, _ = check_look(probe, by_ref, season)
+            if errs:
+                errors.extend(f"вариант «{it['title']}» в слоте {slot}: {e}" for e in errs)
+                continue
+            picked.append(it)
+        if picked:
+            resolved[slot] = picked
+
+    look["_alts"] = resolved
+    return errors
 
 
 def coverage(c: sb.Client, season: str) -> None:
@@ -194,6 +254,9 @@ def main() -> int:
     ap.add_argument("file", nargs="?")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--retire-existing", action="store_true")
+    ap.add_argument("--replace-batch", action="store_true",
+                    help="удалить прежние луки этой же партии и записать заново; "
+                         "откажется, если по ним уже есть оценки или «надел»")
     ap.add_argument("--coverage", action="store_true")
     ap.add_argument("--season", default="2026-autumn")
     args = ap.parse_args()
@@ -217,8 +280,11 @@ def main() -> int:
         by_ref[it["title"]] = it
 
     bad = 0
+    alts_total = 0
     for n, look in enumerate(data["looks"], 1):
         errors, warns, _ = check_look(look, by_ref, season)
+        errors += check_alts(look, by_ref, season)
+        alts_total += sum(len(v) for v in look["_alts"].values())
         head = f"[{n}] {look['situation']} {look['temp_min']}…{look['temp_max']}"
         if errors:
             bad += 1
@@ -232,13 +298,29 @@ def main() -> int:
         for w in warns:
             sb.say(f"    заметка: {w}")
 
-    sb.say(f"\nПроверено {len(data['looks'])} луков, с ошибками {bad}.")
+    sb.say(f"\nПроверено {len(data['looks'])} луков, с ошибками {bad}. "
+           f"Вариантов замены: {alts_total}.")
     if bad:
         sb.say("Ничего не записано — сначала правим состав.")
         return 1
     if args.dry_run:
         sb.say("Сухой прогон: в базу не писал.")
         return 0
+
+    if args.replace_batch:
+        olds = c.select("looks", select="id", season=f"eq.{season}", batch=f"eq.{batch}", limit="1000")
+        ids = [l["id"] for l in olds]
+        if ids:
+            in_list = "(" + ",".join(ids) + ")"
+            rated = c.select("ratings", select="look_id", look_id=f"in.{in_list}", limit="1000")
+            worn = c.select("wear_log", select="look_id", look_id=f"in.{in_list}", limit="1000")
+            if rated or worn:
+                sb.say(f"Партия {batch} уже прожита: оценок {len(rated)}, записей «надел» {len(worn)}. "
+                       "Не удаляю — это отзывы владельца. Пиши новую партию "
+                       "с другим batch и флагом --retire-existing.")
+                return 1
+            c.delete("looks", id=f"in.{in_list}")
+            sb.say(f"Прежняя партия {batch} ({len(ids)} луков) удалена: оценок по ней не было.")
 
     if args.retire_existing:
         c.update("looks", {"status": "retired"},
@@ -257,13 +339,20 @@ def main() -> int:
             for pos, it in enumerate(look["_comp"].get(slot, [])):
                 payload.append({"look_id": row["id"], "item_id": it["id"],
                                 "slot": slot, "position": pos, "user_id": c.user_id})
+        alt_payload = []
+        for slot, picked in (look.get("_alts") or {}).items():
+            for rank, it in enumerate(picked):
+                alt_payload.append({"look_id": row["id"], "item_id": it["id"], "slot": slot,
+                                    "position": 0, "rank": rank, "user_id": c.user_id})
         try:
             c.insert("look_items", payload, prefer="return=minimal")
+            if alt_payload:
+                c.insert("look_alts", alt_payload, prefer="return=minimal")
         except sb.SupabaseError:
             c.delete("looks", id=f"eq.{row['id']}")  # не оставляем лук без состава
             raise
         written += 1
-    sb.say(f"Записано луков: {written}")
+    sb.say(f"Записано луков: {written}, вариантов замены: {alts_total}")
 
     gaps = data.get("gaps") or []
     if gaps:
