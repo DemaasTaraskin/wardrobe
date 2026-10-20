@@ -1,6 +1,6 @@
 // Оболочка приложения кэшируется, чтобы открывалось мгновенно и без сети.
 // Данные и фото из Supabase не кэшируются никогда: ссылки подписаны на час, а строки меняются.
-const CACHE = 'wardrobe-v11';
+const CACHE = 'wardrobe-v12';
 const SHELL = [
   './',
   'index.html',
@@ -13,10 +13,10 @@ const SHELL = [
   'sections.js',
   'config.js',
   'manifest.webmanifest',
-  'icons/icon-192-2.png',
-  'icons/icon-512-2.png',
-  'icons/icon-maskable-512-2.png',
-  'icons/apple-touch-icon-2.png',
+  'icons/icon-192-3.png',
+  'icons/icon-512-3.png',
+  'icons/icon-maskable-512-3.png',
+  'icons/apple-touch-icon-3.png',
 ];
 
 self.addEventListener('install', (e) => {
